@@ -1,0 +1,32 @@
+{
+  "name": "cloud-relay",
+  "version": "0.6.0",
+  "description": "Obsidian sync plugin powered by CRDT",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node test/build.mjs && node test/run.mjs",
+    "e2e": "node test/build.mjs && node test/e2e.mjs",
+    "e2e-join": "node test/build.mjs && node test/e2e-join.mjs"
+  },
+  "keywords": [
+    "obsidian",
+    "sync",
+    "crdt"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.24.2",
+    "obsidian": "^1.7.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "yjs": "^13.6.0"
+  }
+}

@@ -1,0 +1,22 @@
+.cloud-relay-conflict-preview {
+  max-height: 45vh;
+  overflow: auto;
+  display: grid;
+  gap: var(--size-4-2);
+  margin: var(--size-4-3) 0;
+}
+
+.cloud-relay-conflict-preview pre {
+  white-space: pre-wrap;
+  max-height: 18vh;
+  overflow: auto;
+  background: var(--code-background);
+  padding: var(--size-4-2);
+  border-radius: var(--radius-s);
+}
+
+.cloud-relay-conflict-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  flex-wrap: wrap;
+}
