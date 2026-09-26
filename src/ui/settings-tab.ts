@@ -121,7 +121,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     const server = card.createEl("details");
     server.createEl("summary", { text: "Cara menyiapkan server" });
     server.createEl("p", { text: "DB Cloud Relay berjalan di server pribadi menggunakan Docker. Cloudflare Tunnel dapat mengubah port lokal menjadi URL yang bisa diakses device." });
-    server.createEl("code", { text: "git clone https://github.com/enlnlnl79/db-cloud-relay.git\ncd db-cloud-relay\ndocker compose up -d" });
+    server.createEl("code", { text: "git clone https://github.com/enl69/db-cloud-relay.git\ncd db-cloud-relay\ndocker compose up -d" });
     server.createEl("p", { text: "Setelah server aktif, arahkan Cloudflare Tunnel ke localhost:1111. Ambil ADMIN_TOKEN dari docker compose logs. Token ini hanya dibutuhkan device pertama untuk membuat vault." });
 
     const join = card.createEl("details");
