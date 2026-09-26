@@ -282,6 +282,10 @@ export class NoteSyncManager {
       if (i % 5 === 0) await sleep0();
     }
     await this.store.writeAttachSeen(this.attachSeen);
+    // PENTING: device yang baru join tidak menerima update map attachment
+    // (map sudah sinkron sebelum dia connect) — reconcile TIDAK terpicu.
+    // Panggil langsung agar lampiran dari server ditarik saat init/join.
+    await this.reconcileAttachmentsFromRemote();
   }
 
   onAttachmentChange(file: TFile, deleted = false, oldPath?: string) {
@@ -1147,11 +1151,39 @@ export class NoteSyncManager {
 
     if (!idx || idx.deleted || !existingPath) {
       let finalPath = newPath;
-      if (finalPath && this.vault.getAbstractFileByPath(finalPath) instanceof TFile) {
-        finalPath = finalPath.replace(/(\.md)$/i, " (konflik dari device lain)$1");
-        entry.doc.transact(() => {
-          entry.meta.set("path", finalPath);
-        });
+      const occupant = finalPath
+        ? this.vault.getAbstractFileByPath(finalPath)
+        : null;
+      if (occupant instanceof TFile) {
+        const occupantId = this.findNoteIdByPath(finalPath!);
+        if (occupantId === noteId) {
+          // path ditempati note ini sendiri → idempotent, pakai saja
+        } else {
+          // ditempati note lain: kalau ISI identik, tidak perlu konflik sama sekali
+          let sameContent = false;
+          try {
+            const existing = await this.vault.read(occupant);
+            sameContent = existing === newContent;
+          } catch { /* sengaja diabaikan */ }
+          if (sameContent) {
+            // konten sama → jangan buat salinan konflik; note ini mengikuti
+            // path pemilik lama tidak mungkin — cukup tandai note ini sebagai
+            // duplikat diam (file sudah ada di path itu)
+            if (occupantId) {
+              this.index[noteId] = {
+                path: finalPath!,
+                deleted: true, // note-id dobel, konten sudah terwakili file pemilik
+              };
+              this.scheduleIndexWrite();
+              await this.persistNow(noteId);
+              return;
+            }
+          }
+          finalPath = finalPath!.replace(/(\.md)$/i, " (konflik dari device lain)$1");
+          entry.doc.transact(() => {
+            entry.meta.set("path", finalPath);
+          });
+        }
       }
       if (finalPath) {
         await this.ensureParentFolders(finalPath);
@@ -1176,14 +1208,24 @@ export class NoteSyncManager {
       const file = this.vault.getAbstractFileByPath(existingPath);
       if (file instanceof TFile) {
         let renameTarget = newPath;
-        if (this.vault.getAbstractFileByPath(renameTarget)) {
-          renameTarget = renameTarget.replace(
-            /(\.md)$/i,
-            " (konflik dari device lain)$1"
-          );
-          entry.doc.transact(() => {
-            entry.meta.set("path", renameTarget);
-          });
+        const targetOccupant = this.vault.getAbstractFileByPath(renameTarget);
+        if (targetOccupant instanceof TFile) {
+          // cegah loop: kalau target sudah punya suffix konflik ATAU ditempati
+          // note ini sendiri, jangan menambah suffix lagi
+          const occupantId = this.findNoteIdByPath(renameTarget);
+          const alreadySuffixed = renameTarget.includes("(konflik dari device lain)");
+          if (occupantId !== noteId && !alreadySuffixed) {
+            renameTarget = renameTarget.replace(
+              /(\.md)$/i,
+              " (konflik dari device lain)$1"
+            );
+            entry.doc.transact(() => {
+              entry.meta.set("path", renameTarget);
+            });
+          } else if (occupantId === noteId) {
+            // file target adalah milik note ini — cukup hapus duplikat lama
+            renameTarget = newPath;
+          }
         }
         try {
           await this.ensureParentFolders(renameTarget);

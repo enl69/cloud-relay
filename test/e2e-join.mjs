@@ -320,10 +320,13 @@ function readText(dev, p) {
   // ============================================================
   console.log("\n=== JOIN 4: C restart (init ulang) tidak merusak apa pun ===");
   await test("C restart: init → semua file tetap, tanpa duplikasi isi", async () => {
-    // snapshot sebelum
+    // snapshot sebelum — file konflik (artefak mode Gabungkan, by-design
+    // diperbarui saat merge ulang) dikecualikan dari jaminan stabilitas
     const before = {};
     for (const p of Array.from(C.vault.adapter.files.keys())) {
-      if (p.endsWith(".md")) before[p] = readText(C, p);
+      if (p.endsWith(".md") && !p.includes("(konflik dari device lain)")) {
+        before[p] = readText(C, p);
+      }
     }
     // simulasi restart: manager baru + store yang sama
     const storeDir = C.store
