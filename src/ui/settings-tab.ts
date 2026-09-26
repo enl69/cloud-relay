@@ -1,5 +1,4 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import type { SettingDefinitionItem } from "obsidian";
 import type CloudRelayPlugin from "../main";
 import { buildInviteLink, parseInviteLink } from "../settings";
 
@@ -44,41 +43,9 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     return null;
   }
 
-  getSettingDefinitions(): SettingDefinitionItem[] {
-    return [
-      {
-        name: "Status & pengaturan sinkronisasi",
-        desc: "Hubungkan device ini ke server Cloud Relay, kelola invite link, cek sinkronisasi, dan opsi pemulihan.",
-        aliases: ["server", "sync", "invite", "sumber pertama", "gabung", "reset"],
-        render: (setting: Setting) => {
-          const el = setting.settingEl;
-          el.empty();
-          el.addClass("cloud-relay-settings-root");
-          this.renderAll(el);
-        },
-      },
-    ];
-  }
-
-    display(): void {
-    // Fallback untuk Obsidian < 1.13.0 (tanpa API deklaratif)
+  display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    this.renderAll(containerEl);
-  }
-
-  private rerender(): void {
-    // dipanggil dari dalam callback render: re-render penuh container
-    const root = this.containerEl.querySelector(".cloud-relay-settings-root");
-    if (root instanceof HTMLElement) {
-      root.empty();
-      this.renderAll(root);
-    } else {
-      this.display();
-    }
-  }
-
-private renderAll(containerEl: HTMLElement): void {
         containerEl.createEl("p", {
       text: `Versi plugin: ${this.plugin.manifest.version}`,
       cls: "cloud-relay-version",
@@ -124,7 +91,7 @@ private renderAll(containerEl: HTMLElement): void {
     await this.plugin.saveSettings();
     new Notice("Cloud Relay: bergabung ✓ Sinkron dimulai…");
     this.plugin.startSync();
-    this.rerender();
+    this.display();
   }
 
   private backButton(containerEl: HTMLElement) {
@@ -132,7 +99,7 @@ private renderAll(containerEl: HTMLElement): void {
       btn.setButtonText("← Kembali").onClick(() => {
         if (this.mode === "join" && this.step > 1) this.step = 1;
         else this.step = Math.max(0, this.step - 1);
-        this.rerender();
+        this.display();
       })
     );
   }
@@ -184,7 +151,7 @@ private renderAll(containerEl: HTMLElement): void {
         btn.setButtonText("Pilih").setCta().onClick(() => {
           this.mode = "create";
           this.step = 1;
-          this.rerender();
+          this.display();
         })
       );
 
@@ -195,7 +162,7 @@ private renderAll(containerEl: HTMLElement): void {
         btn.setButtonText("Pilih").onClick(() => {
           this.mode = "join";
           this.step = 1;
-          this.rerender();
+          this.display();
         })
       );
   }
@@ -223,7 +190,7 @@ private renderAll(containerEl: HTMLElement): void {
           return;
         }
         this.step = 2;
-        this.rerender();
+        this.display();
       })
     );
 
@@ -256,7 +223,7 @@ private renderAll(containerEl: HTMLElement): void {
       .setDesc("Daftarkan vault ini ke server. Setelah berhasil, akan muncul link untuk device lain.")
       .addButton((btn) =>
         btn.setButtonText("Buat sekarang").setCta().onClick(async () => {
-          if (await this.plugin.createVault()) this.rerender();
+          if (await this.plugin.createVault()) this.display();
         })
       );
 
@@ -308,7 +275,7 @@ private renderAll(containerEl: HTMLElement): void {
         );
         this.joinInfo = { lastUpdate: t.lastUpdate ?? 0, notes: t.notes ?? 0 };
         this.step = 4;
-        this.rerender();
+        this.display();
       })
     );
 
@@ -378,7 +345,7 @@ private renderAll(containerEl: HTMLElement): void {
         btn.setButtonText("Tetap lanjut gabung").onClick(() => {
           this.step = this.app.vault.getMarkdownFiles().length > 0 ? 3 : 0;
           if (this.step === 0) void this.finalizeJoin();
-          else this.rerender();
+          else this.display();
         })
       );
     } else {
@@ -401,7 +368,7 @@ private renderAll(containerEl: HTMLElement): void {
           btn.setButtonText("Lanjut").setCta().onClick(() => {
             if (this.app.vault.getMarkdownFiles().length > 0) {
               this.step = 3;
-              this.rerender();
+              this.display();
             } else {
               void this.finalizeJoin();
             }
@@ -504,7 +471,7 @@ private renderAll(containerEl: HTMLElement): void {
             `Cloud Relay — catatan: vault ${vaultFiles.length}, terdaftar ${local.localNoteIds.length}, server ${serverCount}, belum terdaftar ${belumTerdaftar.length}${sampel ? ` (${sampel}…)` : ""}, belum terkirim ${belumTerkirim.length}, belum diterima ${belumDiterima.length} | lampiran: lokal ${attach.local}, meta ${attach.meta} | folder: lokal ${folders.local}, meta ${folders.meta}`,
             12000
           );
-          this.rerender();
+          this.display();
         })
       );
 
@@ -530,7 +497,7 @@ private renderAll(containerEl: HTMLElement): void {
           this.showDanger = value;
           this.resetArmed = false;
           this.disconnectArmed = false;
-          this.rerender();
+          this.display();
         })
       );
 
@@ -545,13 +512,13 @@ private renderAll(containerEl: HTMLElement): void {
               btn.setButtonText("YAKIN? Klik lagi");
               window.setTimeout(() => {
                 this.recoverArmed = false;
-                this.rerender();
+                this.display();
               }, 5000);
               return;
             }
             this.recoverArmed = false;
             await this.plugin.recoverFromServer();
-            this.rerender();
+            this.display();
           })
         );
 
@@ -565,11 +532,11 @@ private renderAll(containerEl: HTMLElement): void {
           btn.onClick(async () => {
             if (!this.resetArmed) {
               this.resetArmed = true;
-              this.rerender();
+              this.display();
               window.setTimeout(() => {
                 if (this.resetArmed) {
                   this.resetArmed = false;
-                  this.rerender();
+                  this.display();
                 }
               }, 5000);
               return;
@@ -578,7 +545,7 @@ private renderAll(containerEl: HTMLElement): void {
             if (await this.plugin.resetServerVault()) {
               new Notice("Cloud Relay: server di-reset, mengunggah ulang dari device ini…");
             }
-            this.rerender();
+            this.display();
           });
         });
 
@@ -590,11 +557,11 @@ private renderAll(containerEl: HTMLElement): void {
           btn.onClick(async () => {
             if (!this.disconnectArmed) {
               this.disconnectArmed = true;
-              this.rerender();
+              this.display();
               window.setTimeout(() => {
                 if (this.disconnectArmed) {
                   this.disconnectArmed = false;
-                  this.rerender();
+                  this.display();
                 }
               }, 5000);
               return;
@@ -606,7 +573,7 @@ private renderAll(containerEl: HTMLElement): void {
             this.plugin.settings.enabled = false;
             await this.plugin.saveSettings();
             this.step = 0;
-            this.rerender();
+            this.display();
           });
         });
     }
