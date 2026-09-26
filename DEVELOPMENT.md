@@ -7,7 +7,7 @@
 ## 1. Gambaran Besar
 
 Plugin Obsidian yang menyinkronkan vault antar device via server
-**DB Cloud Relay** (repo `enlnlnl79/db-cloud-relay`, Rust + yrs + SQLite).
+**DB Cloud Relay** (repo `enl69/db-cloud-relay`, Rust + yrs + SQLite).
 Model: **mirror penuh** — semua file (catatan md, lampiran, pengaturan
 `.obsidian`) identik di semua device.
 
