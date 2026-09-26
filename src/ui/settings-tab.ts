@@ -1,4 +1,5 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import type CloudRelayPlugin from "../main";
 import { buildInviteLink, parseInviteLink } from "../settings";
 
@@ -43,9 +44,41 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     return null;
   }
 
-  display(): void {
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Status & pengaturan sinkronisasi",
+        desc: "Hubungkan device ini ke server Cloud Relay, kelola invite link, cek sinkronisasi, dan opsi pemulihan.",
+        aliases: ["server", "sync", "invite", "sumber pertama", "gabung", "reset"],
+        render: (setting: Setting) => {
+          const el = setting.settingEl;
+          el.empty();
+          el.addClass("cloud-relay-settings-root");
+          this.renderAll(el);
+        },
+      },
+    ];
+  }
+
+    display(): void {
+    // Fallback untuk Obsidian < 1.13.0 (tanpa API deklaratif)
     const { containerEl } = this;
     containerEl.empty();
+    this.renderAll(containerEl);
+  }
+
+  private rerender(): void {
+    // dipanggil dari dalam callback render: re-render penuh container
+    const root = this.containerEl.querySelector(".cloud-relay-settings-root");
+    if (root instanceof HTMLElement) {
+      root.empty();
+      this.renderAll(root);
+    } else {
+      this.display();
+    }
+  }
+
+private renderAll(containerEl: HTMLElement): void {
         containerEl.createEl("p", {
       text: `Versi plugin: ${this.plugin.manifest.version}`,
       cls: "cloud-relay-version",
@@ -91,7 +124,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     await this.plugin.saveSettings();
     new Notice("Cloud Relay: bergabung ✓ Sinkron dimulai…");
     this.plugin.startSync();
-    this.display();
+    this.rerender();
   }
 
   private backButton(containerEl: HTMLElement) {
@@ -99,7 +132,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       btn.setButtonText("← Kembali").onClick(() => {
         if (this.mode === "join" && this.step > 1) this.step = 1;
         else this.step = Math.max(0, this.step - 1);
-        this.display();
+        this.rerender();
       })
     );
   }
@@ -151,7 +184,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         btn.setButtonText("Pilih").setCta().onClick(() => {
           this.mode = "create";
           this.step = 1;
-          this.display();
+          this.rerender();
         })
       );
 
@@ -162,7 +195,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         btn.setButtonText("Pilih").onClick(() => {
           this.mode = "join";
           this.step = 1;
-          this.display();
+          this.rerender();
         })
       );
   }
@@ -190,7 +223,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           return;
         }
         this.step = 2;
-        this.display();
+        this.rerender();
       })
     );
 
@@ -223,7 +256,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       .setDesc("Daftarkan vault ini ke server. Setelah berhasil, akan muncul link untuk device lain.")
       .addButton((btn) =>
         btn.setButtonText("Buat sekarang").setCta().onClick(async () => {
-          if (await this.plugin.createVault()) this.display();
+          if (await this.plugin.createVault()) this.rerender();
         })
       );
 
@@ -275,7 +308,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         );
         this.joinInfo = { lastUpdate: t.lastUpdate ?? 0, notes: t.notes ?? 0 };
         this.step = 4;
-        this.display();
+        this.rerender();
       })
     );
 
@@ -345,7 +378,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         btn.setButtonText("Tetap lanjut gabung").onClick(() => {
           this.step = this.app.vault.getMarkdownFiles().length > 0 ? 3 : 0;
           if (this.step === 0) void this.finalizeJoin();
-          else this.display();
+          else this.rerender();
         })
       );
     } else {
@@ -368,7 +401,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           btn.setButtonText("Lanjut").setCta().onClick(() => {
             if (this.app.vault.getMarkdownFiles().length > 0) {
               this.step = 3;
-              this.display();
+              this.rerender();
             } else {
               void this.finalizeJoin();
             }
@@ -412,7 +445,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Sinkronisasi pengaturan (.obsidian)")
+      .setName("Sinkronisasi pengaturan vault")
       .setDesc("Sinkronisasi pengaturan vault (app, appearance, plugin list, hotkeys, themes, snippets) ke semua device.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.hiddenSync !== false).onChange(async (v) => {
@@ -471,7 +504,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
             `Cloud Relay — catatan: vault ${vaultFiles.length}, terdaftar ${local.localNoteIds.length}, server ${serverCount}, belum terdaftar ${belumTerdaftar.length}${sampel ? ` (${sampel}…)` : ""}, belum terkirim ${belumTerkirim.length}, belum diterima ${belumDiterima.length} | lampiran: lokal ${attach.local}, meta ${attach.meta} | folder: lokal ${folders.local}, meta ${folders.meta}`,
             12000
           );
-          this.display();
+          this.rerender();
         })
       );
 
@@ -497,7 +530,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           this.showDanger = value;
           this.resetArmed = false;
           this.disconnectArmed = false;
-          this.display();
+          this.rerender();
         })
       );
 
@@ -512,13 +545,13 @@ export class CloudRelaySettingTab extends PluginSettingTab {
               btn.setButtonText("YAKIN? Klik lagi");
               window.setTimeout(() => {
                 this.recoverArmed = false;
-                this.display();
+                this.rerender();
               }, 5000);
               return;
             }
             this.recoverArmed = false;
             await this.plugin.recoverFromServer();
-            this.display();
+            this.rerender();
           })
         );
 
@@ -532,11 +565,11 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           btn.onClick(async () => {
             if (!this.resetArmed) {
               this.resetArmed = true;
-              this.display();
+              this.rerender();
               window.setTimeout(() => {
                 if (this.resetArmed) {
                   this.resetArmed = false;
-                  this.display();
+                  this.rerender();
                 }
               }, 5000);
               return;
@@ -545,7 +578,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
             if (await this.plugin.resetServerVault()) {
               new Notice("Cloud Relay: server di-reset, mengunggah ulang dari device ini…");
             }
-            this.display();
+            this.rerender();
           });
         });
 
@@ -557,11 +590,11 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           btn.onClick(async () => {
             if (!this.disconnectArmed) {
               this.disconnectArmed = true;
-              this.display();
+              this.rerender();
               window.setTimeout(() => {
                 if (this.disconnectArmed) {
                   this.disconnectArmed = false;
-                  this.display();
+                  this.rerender();
                 }
               }, 5000);
               return;
@@ -573,7 +606,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
             this.plugin.settings.enabled = false;
             await this.plugin.saveSettings();
             this.step = 0;
-            this.display();
+            this.rerender();
           });
         });
     }
