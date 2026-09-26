@@ -1,4 +1,4 @@
-import { App, Notice, TFile, Vault } from "obsidian";
+import { App, Notice, requestUrl, TFile, Vault } from "obsidian";
 import * as Y from "yjs";
 
 import { encodeFrame, MSG_SYNC_STEP1, MSG_SYNC_STEP2, MSG_UPDATE } from "./protocol";
@@ -637,20 +637,24 @@ export class NoteSyncManager {
   private async uploadBlob(sha: string, data: Uint8Array) {
     if (!this.http) throw new Error("transport belum siap");
     const url = `${this.http.baseUrl.replace(/\/$/, "")}/v1/blobs/${sha}?token=${encodeURIComponent(this.http.token)}`;
-    const res = await fetch(url, {
+    const res = await requestUrl({
+      url,
       method: "PUT",
       headers: { "content-type": "application/octet-stream" },
-      body: data.slice().buffer as ArrayBuffer,
+      body: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
+      throw: false,
     });
-    if (!res.ok) throw new Error(`upload blob HTTP ${res.status}`);
+    if (res.status >= 300) throw new Error(`upload blob HTTP ${res.status}`);
   }
 
   private async downloadBlob(sha: string): Promise<ArrayBuffer> {
     if (!this.http) throw new Error("transport belum siap");
     const url = `${this.http.baseUrl.replace(/\/$/, "")}/v1/blobs/${sha}?token=${encodeURIComponent(this.http.token)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`download blob HTTP ${res.status}`);
-    return await res.arrayBuffer();
+    const res = await requestUrl({ url, method: "GET", throw: false });
+    if (res.status >= 300 || !res.arrayBuffer) {
+      throw new Error(`download blob HTTP ${res.status}`);
+    }
+    return res.arrayBuffer;
   }
 
   private scheduleAttachReconcile() {

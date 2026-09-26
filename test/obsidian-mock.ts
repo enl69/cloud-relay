@@ -94,8 +94,33 @@ export class Setting {
 
 export class MarkdownView {}
 
-export function requestUrl(opts: { url: string; method?: string; headers?: Record<string, string>; body?: string }) {
-  return Promise.resolve({ status: 200, json: {} });
+const blobStore = new Map<string, ArrayBuffer>();
+
+export function requestUrl(opts: {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: ArrayBuffer;
+  throw?: boolean;
+}): Promise<{ status: number; json: any; arrayBuffer?: ArrayBuffer; text: string }> {
+  const m = opts.url.match(/\/v1\/blobs\/([0-9a-f]{64})/);
+  if (!m) {
+    return Promise.resolve({ status: 404, json: {}, text: "" });
+  }
+  const sha = m[1];
+  if (opts.method === "PUT") {
+    blobStore.set(sha, opts.body ?? new ArrayBuffer(0));
+    return Promise.resolve({ status: 201, json: {}, text: "" });
+  }
+  if (blobStore.has(sha)) {
+    return Promise.resolve({
+      status: 200,
+      json: {},
+      arrayBuffer: blobStore.get(sha),
+      text: "",
+    });
+  }
+  return Promise.resolve({ status: 404, json: {}, text: "" });
 }
 
 export function normalizePath(p: string) {
