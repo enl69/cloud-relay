@@ -46,8 +46,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl).setName("Cloud Relay").setHeading();
-    containerEl.createEl("p", {
+        containerEl.createEl("p", {
       text: `Versi plugin: ${this.plugin.manifest.version}`,
       cls: "cloud-relay-version",
     });
@@ -106,7 +105,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderIntro(containerEl: HTMLElement) {
-    new Setting(containerEl).setName("Apa itu Cloud Relay?").setHeading();
+    new Setting(containerEl).setName("Tentang plugin ini").setHeading();
     const card = containerEl.createDiv({ cls: "cloud-relay-intro" });
     card.createEl("p", { text: "Cloud Relay adalah plugin sinkronisasi vault Obsidian antar-device. Catatan, lampiran, folder, tema, dan pengaturan yang dipilih dapat dibuat sama di Mac, HP, dan device lain." });
 
@@ -530,7 +529,6 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         )
         .addButton((btn) => {
           btn.setButtonText(this.resetArmed ? "YAKIN? Klik lagi untuk reset" : "Reset server");
-          if (typeof btn.setDestructive === "function") btn.setDestructive();
           btn.onClick(async () => {
             if (!this.resetArmed) {
               this.resetArmed = true;
@@ -556,7 +554,6 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         .setDesc("Hapus koneksi di device ini. Catatan lokal tidak dihapus.")
         .addButton((btn) => {
           btn.setButtonText(this.disconnectArmed ? "YAKIN? Klik lagi untuk disconnect" : "Disconnect");
-          if (typeof btn.setDestructive === "function") btn.setDestructive();
           btn.onClick(async () => {
             if (!this.disconnectArmed) {
               this.disconnectArmed = true;

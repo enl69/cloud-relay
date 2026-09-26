@@ -42,7 +42,7 @@ const HIDDEN_FILES = [
 const HIDDEN_DIRS = ["themes", "snippets"];
 
 function obsidianDir(app: App): string {
-  return app.vault.configDir || ".obsidian";
+  return app.vault.configDir;
 }
 
 function isHiddenSyncable(path: string): boolean {
@@ -1053,8 +1053,9 @@ export class NoteSyncManager {
         entry = this.docs.get(ATTACH_ID);
       }
       if (!entry) return;
-      entry.doc.transact(() => {
-        Y.applyUpdate(entry!.doc, update);
+      const docRef = entry.doc;
+      docRef.transact(() => {
+        Y.applyUpdate(docRef, update);
       }, "remote");
       this.scheduleAttachReconcile();
       return;
@@ -1066,7 +1067,8 @@ export class NoteSyncManager {
         entry = this.docs.get(FOLDER_ID);
       }
       if (!entry) return;
-      entry.doc.transact(() => { Y.applyUpdate(entry!.doc, update); }, "remote");
+      const docRef = entry.doc;
+      docRef.transact(() => { Y.applyUpdate(docRef, update); }, "remote");
       await this.reconcileFoldersFromRemote();
       return;
     }
@@ -1077,8 +1079,9 @@ export class NoteSyncManager {
         entry = this.docs.get(HIDDEN_ID);
       }
       if (!entry) return;
-      entry.doc.transact(() => {
-        Y.applyUpdate(entry!.doc, update);
+      const docRef = entry.doc;
+      docRef.transact(() => {
+        Y.applyUpdate(docRef, update);
       }, "remote");
       this.scheduleHiddenReconcile();
       return;

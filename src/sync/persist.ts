@@ -41,7 +41,7 @@ export class SyncStore {
     const path = `${this.dir}/index.json`;
     if (!(await this.adapter.exists(path))) return {};
     try {
-      return JSON.parse(await this.adapter.read(path)) as unknown as Record<string, NoteIndex>;
+      return JSON.parse(await this.adapter.read(path)) as Record<string, NoteIndex>;
     } catch {
       return {};
     }
@@ -58,7 +58,7 @@ export class SyncStore {
     const path = `${this.dir}/attach-seen.json`;
     if (!(await this.adapter.exists(path))) return {};
     try {
-      return JSON.parse(await this.adapter.read(path)) as unknown as Record<string, { sha: string; mtime: number }>;
+      return JSON.parse(await this.adapter.read(path)) as Record<string, { sha: string; mtime: number }>;
     } catch {
       return {};
     }
@@ -75,7 +75,7 @@ export class SyncStore {
     const path = `${this.dir}/hidden-seen.json`;
     if (!(await this.adapter.exists(path))) return {};
     try {
-      return JSON.parse(await this.adapter.read(path)) as unknown as Record<string, { sha: string; mtime: number }>;
+      return JSON.parse(await this.adapter.read(path)) as Record<string, { sha: string; mtime: number }>;
     } catch {
       return {};
     }

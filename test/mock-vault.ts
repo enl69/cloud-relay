@@ -81,6 +81,7 @@ export class MockAdapter {
 
 export class MockVault {
   adapter = new MockAdapter();
+  configDir = ".obsidian";
   // file yang "terlihat" oleh Obsidian (index) — bisa tertinggal dari fs
   indexed = new Map<string, TFile>();
   events: { type: string; fn: (...args: unknown[]) => void }[] = [];
