@@ -112,7 +112,7 @@ function makeDevice(tag) {
 function makeDeviceInner(tag) {
   const vault = new MockVault();
   const store = makeDiskStore(path.join(os.tmpdir(), `relay-e2e-${tag}-${Date.now()}`));
-  const app = { vault, fileManager: {} };
+  const app = { vault, fileManager: { trashFile: async (fl) => { await vault.trash(fl, true); } } };
   const manager = new NoteSyncManager(app, vault, store);
   // E2E: resolve konflik otomatis dengan "merge" (meniru pilihan user)
   manager.setConflictHandler(async (data) => {

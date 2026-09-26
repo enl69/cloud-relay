@@ -46,7 +46,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Cloud Relay" });
+    new Setting(containerEl).setName("Cloud Relay").setHeading();
     containerEl.createEl("p", {
       text: `Versi plugin: ${this.plugin.manifest.version}`,
       cls: "cloud-relay-version",
@@ -106,8 +106,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderIntro(containerEl: HTMLElement) {
+    new Setting(containerEl).setName("Apa itu Cloud Relay?").setHeading();
     const card = containerEl.createDiv({ cls: "cloud-relay-intro" });
-    card.createEl("h3", { text: "Apa itu Cloud Relay?" });
     card.createEl("p", { text: "Cloud Relay adalah plugin sinkronisasi vault Obsidian antar-device. Catatan, lampiran, folder, tema, dan pengaturan yang dipilih dapat dibuat sama di Mac, HP, dan device lain." });
 
     const how = card.createEl("details", { attr: { open: "true" } });
@@ -140,7 +140,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderRoleStep(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Langkah 1 dari 2 — Peran device ini" });
+    new Setting(containerEl).setName("Langkah 1 dari 2 — Peran device ini").setHeading();
     containerEl.createEl("p", {
       text: "Vault yang akan disinkronkan: " + this.app.vault.getName(),
     });
@@ -169,7 +169,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderServerStep(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Langkah 2 dari 3 — Alamat server" });
+    new Setting(containerEl).setName("Langkah 2 dari 3 — Alamat server").setHeading();
 
     new Setting(containerEl)
       .setName("Server URL")
@@ -199,7 +199,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderTokenStep(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Langkah 3 dari 3 — Kunci server" });
+    new Setting(containerEl).setName("Langkah 3 dari 3 — Kunci server").setHeading();
     containerEl.createEl("p", {
       text: `Vault yang akan disinkronkan: ${this.app.vault.getName()} → ${this.plugin.settings.serverUrl}`,
     });
@@ -232,7 +232,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderJoinStep(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Langkah 2 dari 2 — Invite link" });
+    new Setting(containerEl).setName("Langkah 2 dari 2 — Invite link").setHeading();
     containerEl.createEl("p", {
       text: "Vault yang akan disinkronkan: " + this.app.vault.getName(),
     });
@@ -285,7 +285,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
 
   private renderWarningStep(containerEl: HTMLElement) {
     const count = this.app.vault.getMarkdownFiles().length;
-    containerEl.createEl("h3", { text: "Peringatan — vault ini tidak kosong" });
+    new Setting(containerEl).setName("Peringatan — vault ini tidak kosong").setHeading();
     containerEl.createEl("p", {
       text: `Vault "${this.app.vault.getName()}" berisi ${count} catatan. Pilih cara menyesuaikan dengan vault device pertama.`,
     });
@@ -335,7 +335,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   }
 
   private renderInfoStep(containerEl: HTMLElement) {
-    containerEl.createEl("h3", { text: "Konfirmasi data di server" });
+    new Setting(containerEl).setName("Konfirmasi data di server").setHeading();
 
     if (this.joinInfo === "error" || this.joinInfo === null) {
       containerEl.createEl("p", {
@@ -414,7 +414,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Sinkronisasi pengaturan (.obsidian)")
-      .setDesc("Sync app.json, appearance, community-plugins, core-plugins, hotkeys, graph, themes, snippets ke semua device.")
+      .setDesc("Sinkronisasi pengaturan vault (app, appearance, plugin list, hotkeys, themes, snippets) ke semua device.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.hiddenSync !== false).onChange(async (v) => {
           this.plugin.settings.hiddenSync = v;
@@ -530,7 +530,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         )
         .addButton((btn) => {
           btn.setButtonText(this.resetArmed ? "YAKIN? Klik lagi untuk reset" : "Reset server");
-          btn.setWarning();
+          if (typeof btn.setDestructive === "function") btn.setDestructive();
           btn.onClick(async () => {
             if (!this.resetArmed) {
               this.resetArmed = true;
@@ -556,7 +556,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         .setDesc("Hapus koneksi di device ini. Catatan lokal tidak dihapus.")
         .addButton((btn) => {
           btn.setButtonText(this.disconnectArmed ? "YAKIN? Klik lagi untuk disconnect" : "Disconnect");
-          btn.setWarning();
+          if (typeof btn.setDestructive === "function") btn.setDestructive();
           btn.onClick(async () => {
             if (!this.disconnectArmed) {
               this.disconnectArmed = true;

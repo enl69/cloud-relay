@@ -15,10 +15,9 @@ Self-hosted, real-time vault synchronization for Obsidian. Mirrors notes, attach
 
 ## Screenshots
 
-| | |
-|---|---|
-| ![Setup wizard](docs/screenshot-setup.png) | ![Conflict picker](docs/screenshot-conflict.png) |
-| *Setup wizard* | *Offline conflict picker* |
+![Cloud Relay settings](docs/screenshot-setup.png)
+
+*Setup and status panel. When two devices edit the same section offline, a picker offers: keep this device's version, keep the other device's version, or combine both.*
 
 ## Getting started
 

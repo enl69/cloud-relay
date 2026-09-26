@@ -109,7 +109,7 @@ function makeManagerShared(vault, seedJsons) {
     },
     async archive() {},
   };
-  const app = { vault, fileManager: {} };
+  const app = { vault, fileManager: { trashFile: async (f) => { await vault.trash(f, true); } } };
   const manager = new NoteSyncManager(app, vault, store);
   return { manager, store, blobs, jsons };
 }

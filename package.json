@@ -1,6 +1,6 @@
 {
   "name": "cloud-relay",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Obsidian sync plugin powered by CRDT",
   "main": "main.js",
   "scripts": {
@@ -20,7 +20,6 @@
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "builtin-modules": "^4.0.0",
     "esbuild": "^0.24.2",
     "obsidian": "^1.7.0",
     "tslib": "^2.6.0",

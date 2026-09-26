@@ -41,6 +41,10 @@ const HIDDEN_FILES = [
 
 const HIDDEN_DIRS = ["themes", "snippets"];
 
+function obsidianDir(app: App): string {
+  return app.vault.configDir || ".obsidian";
+}
+
 function isHiddenSyncable(path: string): boolean {
   const parts = path.split("/");
   return (
@@ -171,11 +175,6 @@ export class NoteSyncManager {
             if (docLooksStale) {
               // blob lokal tertinggal (crash/debounce) — JANGAN insert ulang,
               // isi akan dipulihkan dari server via sync. Hanya catat mtime.
-              console.warn(
-                "cloud-relay: blob lokal stale utk",
-                file.path,
-                "— skip diff, tunggu sync dari server"
-              );
             } else {
               const d = diffText(entry.lastContent, content);
               entry.doc.transact(() => {
@@ -208,7 +207,7 @@ export class NoteSyncManager {
   private attachMap() {
     const entry = this.docs.get(ATTACH_ID);
     return entry
-      ? (entry.doc.getMap<AttachMeta>("files") as Y.Map<AttachMeta>)
+      ? entry.doc.getMap<AttachMeta>("files")
       : null;
   }
 
@@ -224,7 +223,7 @@ export class NoteSyncManager {
         let existsOnDisk = false;
         try {
           existsOnDisk = await this.app.vault.adapter.exists(path);
-        } catch {}
+        } catch { /* sengaja diabaikan */ }
         if (existsOnDisk) continue;
         const entry = map.get(path);
         if (entry && !entry.deleted) {
@@ -359,8 +358,9 @@ export class NoteSyncManager {
       } catch {
         return;
       }
+      const cfgDir = obsidianDir(this.app);
       for (const f of list.files) {
-        const rel = f.replace(/^\.obsidian\//, "");
+        const rel = f.startsWith(cfgDir + "/") ? f.slice(cfgDir.length + 1) : "";
         if (!rel || rel.startsWith("plugins/cloud-relay/")) continue;
         const top = rel.split("/")[0];
         const name = rel.split("/").pop() ?? "";
@@ -369,11 +369,11 @@ export class NoteSyncManager {
         if (st) acc.push({ path: rel, mtime: st.mtime, size: st.size });
       }
       for (const d of list.folders) {
-        const rel = d.replace(/^\.obsidian\//, "");
-        if (HIDDEN_DIRS.includes(rel.split("/")[0])) await walk(d);
+        const relD = d.startsWith(cfgDir + "/") ? d.slice(cfgDir.length + 1) : "";
+        if (HIDDEN_DIRS.includes(relD.split("/")[0])) await walk(d);
       }
     };
-    await walk(".obsidian");
+    await walk(obsidianDir(this.app));
     return acc;
   }
 
@@ -384,7 +384,7 @@ export class NoteSyncManager {
       try { list = await this.app.vault.adapter.list(dir); } catch { return; }
       for (const folder of list.folders) {
         const clean = folder.replace(/^\//, "").replace(/\/$/, "");
-        if (!clean || clean.startsWith(".obsidian")) continue;
+        if (!clean || clean === obsidianDir(this.app)) continue;
         out.push(clean);
         await walk(folder);
       }
@@ -400,7 +400,7 @@ export class NoteSyncManager {
 
   async scanFolders() {
     if (!this.conn) return;
-    const map = this.docMap(FOLDER_ID) as unknown as Y.Map<boolean> | null;
+    const map = this.docMap(FOLDER_ID) as Y.Map<boolean> | null;
     if (!map) return;
     const local = new Set(await this.listVaultFolders());
     for (const folder of local) map.set(folder, true);
@@ -410,8 +410,8 @@ export class NoteSyncManager {
   }
 
   onFolderChange(path: string, deleted = false, oldPath?: string) {
-    if (this.suspended || !this.conn || path.startsWith(".obsidian")) return;
-    const map = this.docMap(FOLDER_ID) as unknown as Y.Map<boolean> | null;
+    if (this.suspended || !this.conn || path === obsidianDir(this.app)) return;
+    const map = this.docMap(FOLDER_ID) as Y.Map<boolean> | null;
     if (!map) return;
     if (oldPath && oldPath !== path) {
       const old = map.get(oldPath);
@@ -421,22 +421,22 @@ export class NoteSyncManager {
   }
 
   private async reconcileFoldersFromRemote() {
-    const map = this.docMap(FOLDER_ID) as unknown as Y.Map<boolean> | null;
+    const map = this.docMap(FOLDER_ID) as Y.Map<boolean> | null;
     if (!map) return;
     for (const [folder, active] of map.entries()) {
       if (active) {
-        try { await this.ensureParentFolders(`${folder}/.cloud-relay-folder`); } catch {}
+        try { await this.ensureParentFolders(`${folder}/.cloud-relay-folder`); } catch { /* sengaja diabaikan */ }
         if (!(await this.app.vault.adapter.exists(folder))) {
-          try { await this.app.vault.createFolder(folder); } catch {}
+          try { await this.app.vault.createFolder(folder); } catch { /* sengaja diabaikan */ }
         }
       } else if (await this.app.vault.adapter.exists(folder)) {
-        try { await this.app.vault.adapter.remove(folder); } catch {}
+        try { await this.app.vault.adapter.remove(folder); } catch { /* sengaja diabaikan */ }
       }
     }
   }
 
   async folderDiagnostic(): Promise<{ local: number; meta: number }> {
-    const map = this.docMap(FOLDER_ID) as unknown as Y.Map<boolean> | null;
+    const map = this.docMap(FOLDER_ID) as Y.Map<boolean> | null;
     return {
       local: (await this.listVaultFolders()).length,
       meta: map ? Array.from(map.values()).filter(Boolean).length : 0,
@@ -444,12 +444,9 @@ export class NoteSyncManager {
   }
 
   async initHiddenFiles(showProgress = false) {
-    if (!this.http || !this.hiddenSyncEnabled) {
-      console.warn("cloud-relay: initHidden skip — http:", !!this.http, "enabled:", this.hiddenSyncEnabled);
-      return;
-    }
+    if (!this.http || !this.hiddenSyncEnabled) return;
     await this.ensureDoc(HIDDEN_ID, "");
-    const map = this.docMap(HIDDEN_ID) as unknown as Y.Map<AttachMeta> | null;
+    const map = this.docMap(HIDDEN_ID) as Y.Map<AttachMeta> | null;
     if (!map) return;
     let i = 0;
     const files = await this.listHiddenFiles();
@@ -461,7 +458,7 @@ export class NoteSyncManager {
           const entry = map.get(f.path);
           if (entry && entry.sha === seen.sha && !entry.deleted) continue;
         }
-        const buf = await this.vault.adapter.readBinary(`.obsidian/${f.path}`);
+        const buf = await this.vault.adapter.readBinary(`${obsidianDir(this.app)}/${f.path}`);
         const sha = await sha256Hex(buf);
         const entry = map.get(f.path);
         if (!entry || entry.sha !== sha || entry.deleted) {
@@ -483,8 +480,8 @@ export class NoteSyncManager {
       if (meta.deleted) continue;
       let existsLocally = false;
       try {
-        existsLocally = await this.app.vault.adapter.exists(`.obsidian/${path}`);
-      } catch {}
+        existsLocally = await this.app.vault.adapter.exists(`${obsidianDir(this.app)}/${path}`);
+      } catch { /* sengaja diabaikan */ }
       if (!existsLocally) {
         map.set(path, { ...meta, deleted: true });
       }
@@ -497,7 +494,7 @@ export class NoteSyncManager {
     if (!isHiddenSyncable(path)) return;
     if (!deleted && this.isSelfWriteObsidian(path)) return;
     void (async () => {
-      const map = this.docMap(HIDDEN_ID) as unknown as Y.Map<AttachMeta> | null;
+      const map = this.docMap(HIDDEN_ID) as Y.Map<AttachMeta> | null;
       if (!map) return;
       try {
         if (deleted) {
@@ -505,7 +502,7 @@ export class NoteSyncManager {
           if (prev && !prev.deleted) map.set(path, { ...prev, deleted: true });
           delete this.hiddenSeen[path];
         } else {
-          const buf = await this.vault.adapter.readBinary(`.obsidian/${path}`);
+          const buf = await this.vault.adapter.readBinary(`${obsidianDir(this.app)}/${path}`);
           const sha = await sha256Hex(buf);
           const prev = map.get(path);
           if (prev && prev.sha === sha && !prev.deleted) return;
@@ -552,21 +549,20 @@ export class NoteSyncManager {
 
   private async reconcileHiddenFromRemote() {
     if (this.suspended) return;
-    const map = this.docMap(HIDDEN_ID) as unknown as Y.Map<AttachMeta> | null;
+    const map = this.docMap(HIDDEN_ID) as Y.Map<AttachMeta> | null;
     if (!map || !this.http) return;
     for (const [path, meta] of map.entries()) {
       if (this.suspended) return;
-      const localPath = `.obsidian/${path}`;
+      const localPath = `${obsidianDir(this.app)}/${path}`;
       let localExists = false;
       try {
         localExists = await this.app.vault.adapter.exists(localPath);
-      } catch {}
+      } catch { /* sengaja diabaikan */ }
       if (meta.deleted) {
         if (localExists) {
           try {
             await this.app.vault.adapter.remove(localPath);
-            console.log("cloud-relay: hidden file dihapus (remote)", path);
-          } catch {}
+          } catch { /* sengaja diabaikan */ }
         }
         continue;
       }
@@ -574,7 +570,6 @@ export class NoteSyncManager {
       if (localExists && seen && seen.sha === meta.sha) continue;
       try {
         const buf = await this.downloadBlob(meta.sha);
-        const cur = new Uint8Array(buf);
         if (localExists && seen && seen.sha) {
           try {
             const curLocal = new Uint8Array(
@@ -585,7 +580,7 @@ export class NoteSyncManager {
               this.hiddenSeen[path] = { sha: meta.sha, mtime: Date.now() };
               continue;
             }
-          } catch {}
+          } catch { /* sengaja diabaikan */ }
         }
         this.markSelfWriteObsidian(path, Date.now());
         await this.app.vault.adapter.writeBinary(localPath, buf);
@@ -601,7 +596,7 @@ export class NoteSyncManager {
   }
 
   async hiddenDiagnostic(): Promise<{ local: number; meta: number }> {
-    const map = this.docMap(HIDDEN_ID) as unknown as Y.Map<AttachMeta> | null;
+    const map = this.docMap(HIDDEN_ID) as Y.Map<AttachMeta> | null;
     let meta = 0;
     if (map) {
       for (const [, v] of map.entries()) if (!v.deleted) meta++;
@@ -611,24 +606,24 @@ export class NoteSyncManager {
 
   private docMap(docId: string): Y.Map<unknown> | null {
     const entry = this.docs.get(docId);
-    return entry ? (entry.meta as unknown as Y.Map<unknown>) : null;
+    return entry ? entry.meta : null;
   }
 
   async uploadHiddenForce(): Promise<number> {
     if (!this.http) return 0;
     await this.ensureDoc(HIDDEN_ID, "");
-    const map = this.docMap(HIDDEN_ID) as unknown as Y.Map<AttachMeta> | null;
+    const map = this.docMap(HIDDEN_ID) as Y.Map<AttachMeta> | null;
     if (!map) return 0;
     let n = 0;
     for (const f of await this.listHiddenFiles()) {
       try {
-        const buf = await this.vault.adapter.readBinary(`.obsidian/${f.path}`);
+        const buf = await this.vault.adapter.readBinary(`${obsidianDir(this.app)}/${f.path}`);
         const sha = await sha256Hex(buf);
         await this.uploadBlob(sha, new Uint8Array(buf));
         map.set(f.path, { sha, size: f.size, deleted: false });
         this.hiddenSeen[f.path] = { sha, mtime: f.mtime };
         n++;
-      } catch {}
+      } catch { /* sengaja diabaikan */ }
     }
     await this.store.writeHiddenSeen(this.hiddenSeen);
     return n;
@@ -679,14 +674,12 @@ export class NoteSyncManager {
             let mtime = 0;
             try {
               mtime = file.stat.mtime;
-            } catch {}
+            } catch { /* sengaja diabaikan */ }
             this.applyingRemoteByPath.add(path);
             try {
-              await this.vault.trash(file, true);
-            } catch {
-              try {
-                await this.vault.delete(file);
-              } catch {}
+              await this.app.fileManager.trashFile(file);
+            } catch (e) {
+              console.error("cloud-relay: gagal menghapus lampiran", path, e);
             }
             this.applyingRemoteByPath.delete(path);
             this.markSelfWrite(path, mtime);
@@ -1125,11 +1118,13 @@ export class NoteSyncManager {
           let mtime = 0;
           try {
             mtime = file.stat.mtime;
-          } catch {}
+          } catch { /* sengaja diabaikan */ }
           this.applyingRemoteByPath.add(target);
           try {
-            await this.vault.delete(file);
-          } catch {}
+            await this.app.fileManager.trashFile(file);
+          } catch (e) {
+            console.error("cloud-relay: gagal menghapus catatan", target, e);
+          }
           this.applyingRemoteByPath.delete(target);
           this.markSelfWrite(target, mtime);
         }
@@ -1358,7 +1353,7 @@ export class NoteSyncManager {
 }
 
 function sleep0() {
-  return new Promise((r) => setTimeout(r, 0));
+  return new Promise((r) => window.setTimeout(r, 0));
 }
 
 export function diffText(oldS: string, newS: string): {

@@ -100,7 +100,7 @@ function makeDiskStore(dir) {
 function makeDevice(tag, seed = {}) {
   const vault = new MockVault();
   const store = makeDiskStore(path.join(os.tmpdir(), `relay-join-${tag}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`));
-  const app = { vault, fileManager: {} };
+  const app = { vault, fileManager: { trashFile: async (fl) => { await vault.trash(fl, true); } } };
   const manager = new NoteSyncManager(app, vault, store);
   // wiring event PERSIS registerVaultEvents main.ts
   vault.on("create", (file) => {

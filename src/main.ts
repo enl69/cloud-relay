@@ -21,14 +21,14 @@ export default class CloudRelayPlugin extends Plugin {
       let prev = "";
       try {
         prev = await this.app.vault.adapter.read(p);
-      } catch {}
+      } catch { /* sengaja diabaikan */ }
       const lines = prev.split("\n").filter(Boolean);
       while (lines.length > 100) lines.shift(); // jangan tumbuh tanpa batas
       await this.app.vault.adapter.write(
         p,
         `${lines.join("\n")}\n${stamp} ${msg}\n`
       );
-    } catch {}
+    } catch { /* sengaja diabaikan */ }
   }
 
   async onload() {
@@ -56,10 +56,8 @@ export default class CloudRelayPlugin extends Plugin {
 
     this.addRibbonIcon("refresh-cw", "Cloud Relay: sync sekarang", () => {
       if (this.connection && this.syncManager) {
-        const conn = this.connection;
-        const manager = this.syncManager;
-        manager.onDocList([]);
-        this.onConnectSync();
+        this.syncManager.onDocList([]);
+        void this.onConnectSync();
         new Notice("Cloud Relay: sync sekarang…");
       } else {
         new Notice("Cloud Relay: belum terhubung. Buka Settings → Cloud Relay.");
@@ -99,7 +97,7 @@ export default class CloudRelayPlugin extends Plugin {
       this.app.vault.on("create", (file) => {
         if (file instanceof TFile) {
           if (file.extension === "md") {
-            this.app.vault.read(file).then((content) => manager.onFileCreate(file, content));
+            void this.app.vault.read(file).then((content) => manager.onFileCreate(file, content)).catch(() => {});
           } else {
             manager.onAttachmentChange(file);
           }
@@ -112,7 +110,7 @@ export default class CloudRelayPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         if (file instanceof TFile) {
           if (file.extension === "md") {
-            this.app.vault.read(file).then((content) => manager.onFileModify(file, content));
+            void this.app.vault.read(file).then((content) => manager.onFileModify(file, content)).catch(() => {});
           } else {
             manager.onAttachmentChange(file);
           }
@@ -143,7 +141,7 @@ export default class CloudRelayPlugin extends Plugin {
 
   private onConnectSync() {
     if (this.connection && this.syncManager) {
-      this.syncManager.sendSyncSteps(this.connection);
+      void this.syncManager.sendSyncSteps(this.connection);
     }
   }
 
@@ -170,7 +168,7 @@ export default class CloudRelayPlugin extends Plugin {
         method: "POST",
         headers: { "x-admin-token": this.settings.adminToken },
       });
-      const body = res.json as { vault_id: string; token: string };
+      const body = res.json as unknown as { vault_id: string; token: string };
       this.settings.vaultId = body.vault_id;
       this.settings.vaultToken = body.token;
       this.settings.isPrimary = true;
@@ -198,17 +196,10 @@ export default class CloudRelayPlugin extends Plugin {
     let failed = 0;
     for (const file of files) {
       try {
-        try {
-          if (typeof this.app.fileManager.trashFile === "function") {
-            await this.app.fileManager.trashFile(file);
-          } else {
-            await this.app.vault.trash(file, true);
-          }
-        } catch {
-          await this.app.vault.delete(file, true);
-        }
+        await this.app.fileManager.trashFile(file);
         moved++;
-      } catch {
+      } catch (e) {
+        console.error("cloud-relay: gagal menghapus", file.path, e);
         failed++;
       }
     }
@@ -225,7 +216,7 @@ export default class CloudRelayPlugin extends Plugin {
         url: `${serverUrl.replace(/\/$/, "")}/v1/vaults/${vaultId}/info?token=${encodeURIComponent(vaultToken)}`,
         method: "GET",
       });
-      const body = res.json as { last_update: number; notes: number };
+      const body = res.json as unknown as { last_update: number; notes: number };
       return { lastUpdate: body.last_update, notes: body.notes };
     } catch {
       return null;
@@ -238,7 +229,7 @@ export default class CloudRelayPlugin extends Plugin {
         url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/ids?token=${encodeURIComponent(this.settings.vaultToken)}`,
         method: "GET",
       });
-      const body = res.json as { note_ids: string[] };
+      const body = res.json as unknown as { note_ids: string[] };
       return body.note_ids;
     } catch {
       return null;
@@ -306,7 +297,7 @@ export default class CloudRelayPlugin extends Plugin {
         url: `${serverUrl.replace(/\/$/, "")}/v1/vaults/${vaultId}/info?token=${encodeURIComponent(vaultToken)}`,
         method: "GET",
       });
-      const body = res.json as { last_update: number; notes: number };
+      const body = res.json as unknown as { last_update: number; notes: number };
       return {
         ok: true,
         message: "Server merespons",
@@ -333,9 +324,11 @@ export default class CloudRelayPlugin extends Plugin {
     let n = 0;
     for (const file of files) {
       try {
-        await this.app.vault.trash(file, true);
+        await this.app.fileManager.trashFile(file);
         n++;
-      } catch {}
+      } catch (e) {
+        console.error("cloud-relay: gagal menghapus", file.path, e);
+      }
     }
     this.syncManager.resumeAfterReset();
     await this.saveSettings();
@@ -357,9 +350,9 @@ export default class CloudRelayPlugin extends Plugin {
       {
         onDocList: (ids) => {
           void this.syncManager?.initFolders();
-          this.syncManager?.onDocList(ids);
+          void this.syncManager?.onDocList(ids);
           void this.syncManager?.initHiddenFiles(false);
-          this.onConnectSync();
+          void this.onConnectSync();
         },
         onSyncStep1: (id, sv) => this.syncManager?.onSyncStep1(id, sv),
         onSyncStep2: (id, up) => this.syncManager?.onSyncStep2(id, up),
@@ -402,13 +395,14 @@ export default class CloudRelayPlugin extends Plugin {
     const prev = this.hiddenWatchSeen;
     const cur = new Map<string, number>();
     try {
-      const list = await this.app.vault.adapter.list(".obsidian");
+      const list = await this.app.vault.adapter.list(this.app.vault.configDir);
       const allowed = [
         "app.json", "appearance.json", "community-plugins.json",
         "core-plugins.json", "hotkeys.json", "graph.json",
       ];
       for (const f of list.files) {
-        const rel = f.replace(/^\.obsidian\//, "");
+        const cfgDir = this.app.vault.configDir;
+        const rel = f.startsWith(cfgDir + "/") ? f.slice(cfgDir.length + 1) : "";
         if (!rel || rel.startsWith("plugins/cloud-relay/")) continue;
         if (
           !allowed.includes(rel) &&
@@ -419,7 +413,7 @@ export default class CloudRelayPlugin extends Plugin {
         const st = await this.app.vault.adapter.stat(f);
         if (st?.mtime) cur.set(rel, st.mtime);
       }
-    } catch {}
+    } catch { /* sengaja diabaikan */ }
     const firstPoll = !this.hiddenFirstPollDone;
     this.hiddenFirstPollDone = true;
     for (const [rel, mtime] of cur) {
