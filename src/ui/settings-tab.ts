@@ -27,6 +27,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   private resetArmed = false;
   private disconnectArmed = false;
   private recoverArmed = false;
+  private forceArmed = false;
+  private checkResult: Awaited<ReturnType<CloudRelayPlugin["syncSummary"]>> | null = null;
 
   constructor(app: App, plugin: CloudRelayPlugin) {
     super(app, plugin);
@@ -447,45 +449,103 @@ export class CloudRelaySettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Cek sinkronisasi")
-      .setDesc("Bandingkan jumlah file di vault, yang terdaftar di sync, dan yang ada di server.")
+      .setDesc("Bandingkan isi vault device ini dengan server.")
       .addButton((btn) =>
         btn.setButtonText("Cek sekarang").onClick(async () => {
-          new Notice("Cloud Relay: memeriksa…");
-          const vaultFiles = this.app.vault.getMarkdownFiles();
-          const local = this.plugin.syncDiagnostic();
-          const indexedPaths = new Set(Object.values(local.pathById));
-          const belumTerdaftar = vaultFiles.filter((f) => !indexedPaths.has(f.path));
-          const serverIds = await this.plugin.fetchVaultNoteIds();
-          const serverCount = serverIds === null ? "?" : serverIds.length;
-          const serverSet = new Set(serverIds ?? []);
-          const localSet = new Set(local.localNoteIds);
-          const belumTerkirim = local.localNoteIds.filter((id) => !serverSet.has(id));
-          const belumDiterima = (serverIds ?? []).filter((id) => !localSet.has(id));
-          const sampel = belumTerdaftar
-            .slice(0, 3)
-            .map((f) => f.path)
-            .join(", ");
-          const attach = this.plugin.attachmentDiagnostic();
-          const folders = await this.plugin.folderDiagnostic();
-          new Notice(
-            `Cloud Relay — catatan: vault ${vaultFiles.length}, terdaftar ${local.localNoteIds.length}, server ${serverCount}, belum terdaftar ${belumTerdaftar.length}${sampel ? ` (${sampel}…)` : ""}, belum terkirim ${belumTerkirim.length}, belum diterima ${belumDiterima.length} | lampiran: lokal ${attach.local}, meta ${attach.meta} | folder: lokal ${folders.local}, meta ${folders.meta}`,
-            12000
-          );
+          btn.setButtonText("Memeriksa…");
+          btn.setDisabled(true);
+          this.checkResult = await this.plugin.syncSummary();
+          btn.setButtonText("Cek sekarang");
+          btn.setDisabled(false);
           this.display();
         })
       );
 
+    if (this.checkResult) {
+      const r = this.checkResult;
+      const card = containerEl.createDiv({ cls: "cloud-relay-check-card" });
+
+      const devices = this.plugin.listDevices();
+      const devTitle = card.createEl("h4", { text: "Device di vault ini" });
+      void devTitle;
+      const devList = card.createEl("ul", { cls: "cloud-relay-device-list" });
+      if (devices.length === 0) {
+        devList.createEl("li", { text: "Belum ada info device (hubungkan minimal 1 device)." });
+      }
+      for (const d of devices) {
+        const li = devList.createEl("li");
+        const umur = Date.now() - d.lastSeen;
+        const umurTxt = umur < 60000 ? "baru saja" : umur < 3600000 ? `${Math.floor(umur/60000)} menit lalu` : `${Math.floor(umur/3600000)} jam lalu`;
+        li.setText(
+          `${d.role === "sumber pertama" ? "★" : "•"} ${d.name} (${d.platform}) — ${d.role} — ${d.files} file, ${d.folders} folder — aktif ${umurTxt}`
+        );
+      }
+
+      const cmpTitle = card.createEl("h4", { text: "Perbandingan dengan server" });
+      void cmpTitle;
+      const table = card.createEl("table", { cls: "cloud-relay-check-table" });
+      const head = table.createEl("tr");
+      head.createEl("th", { text: "" });
+      head.createEl("th", { text: "Device ini" });
+      head.createEl("th", { text: "Server" });
+      const rows: Array<[string, number, string]> = [
+        ["Catatan", r.localNotes, r.serverNotes < 0 ? "?" : `${r.serverNotes}`],
+        ["Lampiran", r.localAttachments, "—"],
+        ["Folder", r.localFolders, "—"],
+        ["Total file", r.localFiles, "—"],
+      ];
+      for (const [label, lokal, server] of rows) {
+        const tr = table.createEl("tr");
+        tr.createEl("td", { text: label });
+        const tdL = tr.createEl("td", { text: `${lokal}` });
+        const tdS = tr.createEl("td", { text: `${server}` });
+        if (label === "Catatan" && r.serverNotes >= 0 && r.serverNotes !== r.localNotes) {
+          tdL.addClass("cloud-relay-warn");
+          tdS.addClass("cloud-relay-warn");
+        }
+      }
+
+      const noteMismatch = r.serverNotes >= 0 && r.serverNotes !== r.localNotes;
+      if (noteMismatch) {
+        card.createEl("p", {
+          text: `Jumlah catatan berbeda: device ini ${r.localNotes}, server ${r.serverNotes}. Klik "Samakan server ke device ini" untuk memaksa server 100% sama dengan vault ini.`,
+          cls: "cloud-relay-warning",
+        });
+      } else if (r.serverNotes >= 0) {
+        card.createEl("p", {
+          text: "Cocok — isi server sama dengan device ini.",
+          cls: "cloud-relay-ok",
+        });
+      }
+    }
+
     new Setting(containerEl)
-      .setName("Pindai ulang vault")
-      .setDesc("Daftarkan file yang belum masuk sync (misal setelah update plugin).")
+      .setName("Samakan server ke device ini")
+      .setDesc("Kosongkan server lalu unggah ulang seluruh isi vault ini (catatan, lampiran, folder, pengaturan). Device lain akan mengikuti setelah sync berikutnya. Gunakan di device yang isinya paling benar.")
       .addButton((btn) =>
-        btn.setButtonText("Pindai").onClick(async () => {
+        btn.setButtonText("Samakan sekarang").onClick(async () => {
+          if (!this.forceArmed) {
+            this.forceArmed = true;
+            btn.setButtonText("YAKIN? Server akan disamakan ke device ini");
+            window.setTimeout(() => {
+              if (this.forceArmed) {
+                this.forceArmed = false;
+                this.display();
+              }
+            }, 6000);
+            return;
+          }
+          this.forceArmed = false;
           btn.setDisabled(true);
-          btn.setButtonText("Memindai…");
-          await this.plugin.rescanVault();
-          btn.setDisabled(false);
-          btn.setButtonText("Pindai");
-          new Notice("Cloud Relay: pemindaian selesai ✓");
+          btn.setButtonText("Menyamakan…");
+          try {
+            await this.plugin.rescanVault();
+            this.checkResult = await this.plugin.syncSummary();
+          } finally {
+            btn.setDisabled(false);
+            btn.setButtonText("Samakan sekarang");
+            this.display();
+          }
         })
       );
 

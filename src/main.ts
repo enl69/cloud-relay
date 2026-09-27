@@ -69,6 +69,7 @@ export default class CloudRelayPlugin extends Plugin {
     if (this.settings.enabled && this.settings.vaultId) {
       await this.syncManager?.initFolders();
       this.startSync();
+      void this.updateDeviceInfo();
       void this.syncManager
         ?.initHiddenFiles(false)
         .then(() => {
@@ -257,15 +258,61 @@ export default class CloudRelayPlugin extends Plugin {
 
   async rescanVault() {
     if (this.scanning) {
-      new Notice("Cloud Relay: pemindaian sedang berjalan, tunggu selesai…");
+      new Notice("Cloud Relay: sinkronisasi sedang berjalan, tunggu selesai…");
       return;
     }
+    this.scanning = true;
+    try {
+      new Notice("Cloud Relay: menyamakan server dengan vault ini (100%)…");
+      // 1) hapus SEMUA isi server vault
+      await requestUrl({
+        url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/reset?token=${encodeURIComponent(this.settings.vaultToken)}`,
+        method: "POST",
+      });
+      // 2) reconnect bersih
+      this.stopSync();
+      this.startSync();
+      await new Promise((r) => window.setTimeout(r, 3000));
+      // 3) rebuild lokal dari file fisik + push full state
+      await this.syncManager?.forcePushAllToServer();
+      // 4) tulis info device terbaru
+      await this.syncManager?.updateOwnDeviceInfo(
+        this.settings.isPrimary ? "sumber pertama" : "pengikut"
+      );
+      new Notice("Cloud Relay: server kini 100% sama dengan vault ini ✓");
+    } catch (e) {
+      new Notice(`Cloud Relay: sinkronisasi paksa gagal — ${e}`);
+      console.error("cloud-relay: force sync gagal", e);
+    } finally {
+      this.scanning = false;
+    }
+  }
+
+  async rescanVaultLight() {
+    if (this.scanning) return;
     this.scanning = true;
     try {
       await this.syncManager?.init(true);
     } finally {
       this.scanning = false;
     }
+  }
+
+  listDevices() {
+    return this.syncManager?.listDevices() ?? [];
+  }
+
+  async updateDeviceInfo() {
+    await this.syncManager?.updateOwnDeviceInfo(
+      this.settings.isPrimary ? "sumber pertama" : "pengikut"
+    );
+  }
+
+  async syncSummary() {
+    const base = await this.syncManager?.syncSummary();
+    if (!base) return null;
+    const serverIds = await this.fetchVaultNoteIds();
+    return { ...base, serverNotes: serverIds === null ? -1 : serverIds.length };
   }
 
   async resetServerVault(): Promise<boolean> {
@@ -351,6 +398,7 @@ export default class CloudRelayPlugin extends Plugin {
       {
         onDocList: (ids) => {
           void this.syncManager?.initFolders();
+          void this.updateDeviceInfo();
           void this.syncManager?.onDocList(ids);
           void this.syncManager?.initHiddenFiles(false);
           void this.onConnectSync();

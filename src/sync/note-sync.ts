@@ -23,6 +23,17 @@ export function isSyncablePath(path: string): boolean {
 const ATTACH_ID = "__attachments__";
 const HIDDEN_ID = "__hiddens__";
 const FOLDER_ID = "__folders__";
+const DEVICES_ID = "__devices__";
+
+interface DeviceInfo {
+  name: string;
+  platform: string;
+  role: "sumber pertama" | "pengikut";
+  files: number;
+  folders: number;
+  notes: number;
+  lastSeen: number;
+}
 
 interface AttachMeta {
   sha: string;
@@ -448,6 +459,114 @@ export class NoteSyncManager {
     }
   }
 
+
+  // ============ INFO DEVICE (tampil di semua device + server state) ============
+
+  get deviceId(): string {
+    // ID perangkat stabil: simpan di localStorage (browser-context Obsidian)
+    let id = window.localStorage.getItem("cloud-relay-device-id");
+    if (!id) {
+      id = crypto.randomUUID().slice(0, 8);
+      window.localStorage.setItem("cloud-relay-device-id", id);
+    }
+    return id;
+  }
+
+  private detectDeviceName(): string {
+    const ua = navigator.userAgent;
+    if (/Android/i.test(ua)) {
+      const m = ua.match(/Android.*;\s([^;)]+)\s+Build/i);
+      if (m) return m[1];
+      return "Android";
+    }
+    if (/iPhone|iPad|iPod/i.test(ua)) return "iPhone/iPad";
+    if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
+    if (/Windows/i.test(ua)) return "Windows PC";
+    if (/Linux/i.test(ua)) return "Linux";
+    return "Device";
+  }
+
+  async updateOwnDeviceInfo(role: "sumber pertama" | "pengikut") {
+    await this.ensureDoc(DEVICES_ID, "");
+    const map = this.docMap(DEVICES_ID) as unknown as Y.Map<DeviceInfo> | null;
+    if (!map) return;
+    const vaultAll = this.vault.getFiles().filter((f) => !f.path.startsWith(this.app.vault.configDir));
+    const notes = this.vault.getMarkdownFiles().length;
+    const files = vaultAll.length;
+    const folders = (await this.listVaultFolders()).length;
+    const id = this.deviceId;
+    map.set(id, {
+      name: this.detectDeviceName(),
+      platform: /Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile" : "desktop",
+      role,
+      files,
+      folders,
+      notes,
+      lastSeen: Date.now(),
+    });
+    await this.persistNow(DEVICES_ID);
+  }
+
+  listDevices(): DeviceInfo[] {
+    const map = this.docMap(DEVICES_ID) as unknown as Y.Map<DeviceInfo> | null;
+    if (!map) return [];
+    return Array.from(map.values()).sort((a, b) => b.lastSeen - a.lastSeen);
+  }
+
+  // ============ DIAGNOSTIC TERSTRUKTUR (untuk panel Cek Sinkronisasi) ============
+
+  async syncSummary(): Promise<{
+    localNotes: number;
+    localFiles: number;
+    localFolders: number;
+    localAttachments: number;
+    serverNotes: number;
+    mismatchedNotes: string[];
+  }> {
+    const notes = this.vault.getMarkdownFiles();
+    const vaultAll = this.vault.getFiles().filter((f) => !f.path.startsWith(this.app.vault.configDir));
+    const folders = await this.listVaultFolders();
+    const attachments = vaultAll.filter((f) => f.extension !== "md").length;
+    return {
+      localNotes: notes.length,
+      localFiles: vaultAll.length,
+      localFolders: folders.length,
+      localAttachments: attachments,
+      serverNotes: -1,
+      mismatchedNotes: [],
+    };
+  }
+
+  // ============ FORCE SYNC: buat server 100% sama dengan lokal ============
+
+  async forcePushAllToServer() {
+    if (!this.conn) throw new Error("belum terhubung ke server");
+    // 1) reset store dokumen lama & rebuild index dari vault fisik
+    this.suspend();
+    this.docs.clear();
+    this.svCache.clear();
+    this.pendingPush.clear();
+    this.index = {};
+    await this.store.archive();
+    await this.store.ensureDir();
+    // 2) daftarkan ulang semua file lokal
+    await this.init(true);
+    await this.initFolders();
+    await this.initAttachments();
+    await this.initHiddenFiles();
+    this.resumeAfterReset();
+    // 3) kirim full state semua note ke server
+    await this.sendSyncSteps(this.conn);
+    for (const [id] of this.docs) {
+      if (id.startsWith("__")) continue;
+      const entry = this.docs.get(id);
+      if (!entry) continue;
+      const full = Y.encodeStateAsUpdate(entry.doc);
+      this.conn.send(encodeFrame(MSG_UPDATE, id, new Uint8Array(full)));
+      await sleep0();
+    }
+  }
+
   async folderDiagnostic(): Promise<{ local: number; meta: number }> {
     const map = this.docMap(FOLDER_ID) as Y.Map<boolean> | null;
     return {
@@ -808,6 +927,7 @@ export class NoteSyncManager {
   async sendSyncSteps(conn: Conn) {
     const ids = Object.keys(this.index).filter((id) => !this.index[id].deleted);
     if (!ids.includes(FOLDER_ID)) ids.push(FOLDER_ID);
+    if (!ids.includes(DEVICES_ID)) ids.push(DEVICES_ID);
     if (this.hiddenSyncEnabled && !ids.includes(HIDDEN_ID)) ids.push(HIDDEN_ID);
     for (const id of ids) {
       if (id === FOLDER_ID) await this.ensureDoc(FOLDER_ID, "");
@@ -1102,6 +1222,18 @@ export class NoteSyncManager {
   private async applyRemote(noteId: string, update: Uint8Array) {
     if (this.suspended) return;
     await sleep0();
+    if (noteId === DEVICES_ID) {
+      let entry = this.docs.get(DEVICES_ID);
+      if (!entry) {
+        await this.ensureDoc(DEVICES_ID, "");
+        entry = this.docs.get(DEVICES_ID);
+      }
+      if (!entry) return;
+      entry.doc.transact(() => {
+        Y.applyUpdate(entry!.doc, update);
+      }, "remote");
+      return;
+    }
     if (noteId === ATTACH_ID) {
       let entry = this.docs.get(ATTACH_ID);
       if (!entry) {
@@ -1493,7 +1625,7 @@ export class NoteSyncManager {
     const localNoteIds: string[] = [];
     const pathById: Record<string, string> = {};
     for (const [id, idx] of Object.entries(this.index)) {
-      if (id === ATTACH_ID || id === HIDDEN_ID) continue;
+      if (id === ATTACH_ID || id === HIDDEN_ID || id === DEVICES_ID || id === FOLDER_ID) continue;
       if (!idx.deleted && idx.path) {
         localNoteIds.push(id);
         pathById[id] = idx.path;

@@ -71,3 +71,47 @@
     grid-template-columns: 1fr;
   }
 }
+
+.cloud-relay-check-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-3) var(--size-4-4);
+  margin: var(--size-4-2) 0 var(--size-4-4);
+}
+.cloud-relay-check-card h4 {
+  margin: var(--size-4-3) 0 var(--size-4-2);
+}
+.cloud-relay-check-card h4:first-child { margin-top: 0; }
+.cloud-relay-device-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.cloud-relay-device-list li {
+  padding: var(--size-4-1) 0;
+  border-bottom: 1px dashed var(--background-modifier-border);
+}
+.cloud-relay-device-list li:last-child { border-bottom: none; }
+.cloud-relay-check-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cloud-relay-check-table th,
+.cloud-relay-check-table td {
+  text-align: left;
+  padding: var(--size-4-1) var(--size-4-3) var(--size-4-1) 0;
+}
+.cloud-relay-check-table th {
+  color: var(--text-muted);
+  font-weight: var(--font-semibold);
+}
+.cloud-relay-check-table td.cloud-relay-warn,
+p.cloud-relay-warning {
+  color: var(--text-error);
+  font-weight: var(--font-semibold);
+}
+p.cloud-relay-ok {
+  color: var(--text-success);
+  font-weight: var(--font-semibold);
+}
