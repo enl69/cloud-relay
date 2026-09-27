@@ -40,7 +40,7 @@ export default class CloudRelayPlugin extends Plugin {
     this.syncManager = new NoteSyncManager(this.app, this.app.vault, this.store);
     this.syncManager.setConflictHandler((data) => {
       new ConflictModal(this.app, data, (choice) => {
-        void this.syncManager?.resolveConflict(data.noteId, choice, data.local, data.remote);
+        void this.syncManager?.resolveConflict(data.noteId, choice, data.local, data.remote, data.pendingUpdate, data.path);
       }).open();
     });
 

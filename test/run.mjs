@@ -365,6 +365,10 @@ function makeConn() {
     const { manager } = makeManager(vault);
     await manager.init();
     manager.setConn(makeConn());
+    // UX baru: konflik isi beda → popup (handler) memilih versi lokal
+    manager.setConflictHandler(async (data) => {
+      await manager.resolveConflict(data.noteId, "local", data.local, data.remote, data.pendingUpdate, data.path);
+    });
 
     // remote rename lama.md → baru.md
     const remote = new Y.Doc();

@@ -82,10 +82,19 @@ export class NoteSyncManager {
   private attachReconcileTimer: number | null = null;
   private flushTimer: number | null = null;
   private localDirty = new Set<string>();
-  private conflictHandler: ((data: { noteId: string; path: string; local: string; remote: string; deleted: boolean }) => void) | null = null;
+  private conflictHandler: ((data: { noteId: string; path: string; local: string; remote: string; deleted: boolean; pendingUpdate: Uint8Array | null }) => void) | null = null;
 
-  setConflictHandler(handler: (data: { noteId: string; path: string; local: string; remote: string; deleted: boolean }) => void) {
+  setConflictHandler(handler: (data: { noteId: string; path: string; local: string; remote: string; deleted: boolean; pendingUpdate: Uint8Array | null }) => void) {
     this.conflictHandler = handler;
+  }
+
+  private adoptPathForNote(noteId: string, path: string) {
+    if (!path) return;
+    const cur = this.index[noteId];
+    if (!cur || cur.deleted || !cur.path) {
+      this.index[noteId] = { path, deleted: false };
+      this.scheduleIndexWrite();
+    }
   }
 
   private markSelfWrite(path: string, mtime: number) {
@@ -1036,33 +1045,57 @@ export class NoteSyncManager {
     })();
   }
 
-  async resolveConflict(noteId: string, choice: "local" | "remote" | "merge", local: string, remote: string) {
+  async resolveConflict(noteId: string, choice: "local" | "remote" | "merge", local: string, remote: string, pendingUpdate: Uint8Array | null = null, resolvePath?: string) {
     const entry = this.docs.get(noteId);
     if (!entry) return;
-    const content = choice === "local"
-      ? local
-      : choice === "remote"
-        ? remote
-        : `${local}\n\n--- Cloud Relay: versi remote ---\n\n${remote}`;
+    const path = resolvePath ?? this.index[noteId]?.path ?? "";
+    if (path) this.adoptPathForNote(noteId, path);
+    // 1) apply update remote mentah dulu (origin "remote" → tidak terkirim balik)
+    if (pendingUpdate) {
+      entry.doc.transact(() => {
+        Y.applyUpdate(entry.doc, pendingUpdate);
+      }, "remote");
+    }
+    const content =
+      choice === "local"
+        ? local
+        : choice === "remote"
+          ? remote
+          : `${local}\n\n--- versi device lain (digabung) ---\n\n${remote}`;
+    // PENTING: resolve dipanggil SEBELUM update remote di-apply ke doc
+    // (conflictHandler return early). Terapkan dulu update tertunda via
+    // replace penuh: kosongkan text, insert konten pilihan.
     entry.doc.transact(() => {
-      if (entry.text.length > 0) entry.text.delete(0, entry.text.length);
+      const len = entry.text.length;
+      if (len > 0) entry.text.delete(0, len);
       if (content) entry.text.insert(0, content);
       entry.meta.set("deleted", false);
     });
     entry.lastContent = content;
+    entry.lastPath = path;
     this.localDirty.delete(noteId);
-    const idx = this.index[noteId];
-    if (idx?.path) {
-      const file = this.vault.getAbstractFileByPath(idx.path);
+    if (path) {
+      const file = this.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) {
-        this.applyingRemoteByPath.add(idx.path);
+        this.applyingRemoteByPath.add(path);
         await this.vault.modify(file, content);
-        this.applyingRemoteByPath.delete(idx.path);
+        this.applyingRemoteByPath.delete(path);
+        const nf = this.vault.getAbstractFileByPath(path);
+        if (nf instanceof TFile) {
+          this.markSelfWrite(path, nf.stat.mtime);
+          this.index[noteId].mtime = nf.stat.mtime;
+        }
       } else {
-        await this.ensureParentFolders(idx.path);
-        await this.vault.create(idx.path, content);
+        await this.ensureParentFolders(path);
+        await this.vault.create(path, content);
+        const nf = this.vault.getAbstractFileByPath(path);
+        if (nf instanceof TFile) {
+          this.markSelfWrite(path, nf.stat.mtime);
+          this.index[noteId].mtime = nf.stat.mtime;
+        }
       }
     }
+    this.scheduleIndexWrite();
     await this.persistNow(noteId);
   }
 
@@ -1130,6 +1163,7 @@ export class NoteSyncManager {
         local: oldContent,
         remote: deleted ? "" : newContent,
         deleted,
+        pendingUpdate: update,
       });
       return;
     }
@@ -1211,41 +1245,43 @@ export class NoteSyncManager {
             await this.persistNow(noteId);
             return;
           }
-          // isi benar-benar beda (konflik nyata dua versi) → simpan
-          // dengan suffix, TAPI jangan pernah menumpuk suffix ganda
-          let conflictPath = finalPath!.replace(/(\.md)$/i, " (konflik dari device lain)$1");
-          let guard = 0;
-          while (
-            this.vault.getAbstractFileByPath(conflictPath) instanceof TFile &&
-            guard < 50
-          ) {
-            const existing = await this.vault.adapter
-              .read(conflictPath)
-              .catch(() => null);
-            if (existing === newContent) {
-              finalPath = conflictPath;
-              sameContent = true;
-              break;
-            }
-            conflictPath = conflictPath.replace(
-              /(\.md)$/,
-              "-$1"
-            );
-            guard++;
-          }
-          if (sameContent) {
-            // salinan konflik identik sudah ada di disk → adopsi
-            this.index[noteId] = { path: finalPath, deleted: false };
-            this.scheduleIndexWrite();
-            entry.lastContent = newContent;
-            entry.lastPath = finalPath;
-            await this.persistNow(noteId);
+          // isi BENAR-BENAR beda (konflik nyata dua versi):
+          // JANGAN buat file konflik fisik — serahkan ke ConflictModal
+          // (user pilih versi lokal / remote / gabung, dengan pratinjau).
+          // Modal dipicu di titik konflik terdeteksi (sebelum apply),
+          // jadi di sini konten remote sudah dipilih/dimerge oleh user.
+          // Jika tidak ada handler (mis. headless), fallback: timpa file
+          // dengan konten remote (mirror-style, tanpa file dobel).
+          if (this.conflictHandler) {
+            this.conflictHandler({
+              noteId,
+              path: finalPath!,
+              local: await this.vault.adapter
+                .read(finalPath!)
+                .catch(() => ""),
+              remote: newContent,
+              deleted: false,
+              pendingUpdate: update,
+            });
             return;
           }
-          finalPath = conflictPath;
-          entry.doc.transact(() => {
-            entry.meta.set("path", finalPath);
-          });
+          // fallback tanpa handler: timpa in-place
+          this.applyingRemoteByPath.add(finalPath!);
+          await this.vault.adapter
+            .write(finalPath!, newContent)
+            .catch(() => null);
+          this.applyingRemoteByPath.delete(finalPath!);
+          const nfFallback = this.vault.getAbstractFileByPath(finalPath!);
+          if (nfFallback instanceof TFile) {
+            this.markSelfWrite(finalPath!, nfFallback.stat.mtime);
+            this.index[noteId].mtime = nfFallback.stat.mtime;
+          }
+          this.index[noteId] = { path: finalPath!, deleted: false };
+          this.scheduleIndexWrite();
+          entry.lastContent = newContent;
+          entry.lastPath = finalPath!;
+          await this.persistNow(noteId);
+          return;
         }
       }
       if (finalPath) {
@@ -1303,18 +1339,32 @@ export class NoteSyncManager {
             await this.persistNow(noteId);
             return;
           }
-          const alreadySuffixed = renameTarget.includes("(konflik dari device lain)");
-          if (occupantId !== noteId && !alreadySuffixed) {
-            renameTarget = renameTarget.replace(
-              /(\.md)$/i,
-              " (konflik dari device lain)$1"
-            );
-            entry.doc.transact(() => {
-              entry.meta.set("path", renameTarget);
+          // isi beda di path target rename: serahkan ke ConflictModal,
+          // JANGAN buat file konflik fisik. Tanpa handler → fallback mirror.
+          if (this.conflictHandler) {
+            this.conflictHandler({
+              noteId,
+              path: renameTarget,
+              local: await this.vault.adapter
+                .read(renameTarget)
+                .catch(() => ""),
+              remote: newContent,
+              deleted: false,
+              pendingUpdate: update,
             });
-          } else if (occupantId === noteId) {
-            renameTarget = newPath;
+            return;
           }
+          // fallback tanpa handler: note tetap di path lama, konten remote
+          // menimpa isi note (tanpa file dobel)
+          this.applyingRemoteByPath.add(existingPath);
+          await this.vault.modify(file, newContent).catch(() => null);
+          this.applyingRemoteByPath.delete(existingPath);
+          idx.mtime = file.stat.mtime;
+          this.scheduleIndexWrite();
+          entry.lastContent = newContent;
+          entry.lastPath = existingPath;
+          await this.persistNow(noteId);
+          return;
         }
         try {
           await this.ensureParentFolders(renameTarget);

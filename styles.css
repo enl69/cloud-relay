@@ -20,3 +20,54 @@
   gap: var(--size-4-2);
   flex-wrap: wrap;
 }
+
+.cloud-relay-conflict-modal .cloud-relay-conflict-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--size-4-3);
+  margin: var(--size-4-3) 0;
+}
+.cloud-relay-conflict-modal .cloud-relay-conflict-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2) var(--size-4-3);
+  min-width: 0;
+}
+.cloud-relay-conflict-modal h4 {
+  margin: 0 0 var(--size-4-2);
+}
+.cloud-relay-conflict-modal pre {
+  white-space: pre-wrap;
+  max-height: 22vh;
+  overflow: auto;
+  background: var(--code-background);
+  border-radius: var(--radius-s);
+  padding: var(--size-4-2);
+  font-size: var(--font-smaller);
+  margin: 0;
+}
+.cloud-relay-conflict-modal .cloud-relay-conflict-preview-result {
+  border: 1px solid var(--interactive-accent);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2) var(--size-4-3);
+  margin: var(--size-4-3) 0;
+}
+.cloud-relay-conflict-modal .cloud-relay-conflict-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  flex-wrap: wrap;
+}
+.cloud-relay-conflict-modal .cloud-relay-choice-active {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+.cloud-relay-conflict-modal .cloud-relay-conflict-confirm {
+  margin-top: var(--size-4-4);
+  display: flex;
+  justify-content: flex-end;
+}
+@media (max-width: 600px) {
+  .cloud-relay-conflict-modal .cloud-relay-conflict-body {
+    grid-template-columns: 1fr;
+  }
+}

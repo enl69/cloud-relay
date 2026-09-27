@@ -116,7 +116,7 @@ function makeDeviceInner(tag) {
   const manager = new NoteSyncManager(app, vault, store);
   // E2E: resolve konflik otomatis dengan "merge" (meniru pilihan user)
   manager.setConflictHandler(async (data) => {
-    await manager.resolveConflict(data.noteId, "merge", data.local, data.remote);
+    await manager.resolveConflict(data.noteId, "merge", data.local, data.remote, data.pendingUpdate, data.path);
   });
   // wiring event PERSIS main.ts registerVaultEvents
   vault.on("create", (file) => {
