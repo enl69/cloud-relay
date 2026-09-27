@@ -487,22 +487,12 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       head.createEl("th", { text: "" });
       head.createEl("th", { text: "Device ini" });
       head.createEl("th", { text: "Server" });
+      const serverAtt = (r as unknown as { serverAttachments?: number }).serverAttachments;
+      const serverFld = (r as unknown as { serverFolders?: number }).serverFolders;
       const rows: Array<[string, number, string]> = [
         ["Catatan", r.localNotes, r.serverNotes < 0 ? "?" : `${r.serverNotes}`],
-        [
-          "Lampiran",
-          r.localAttachments,
-          (r as unknown as { serverAttachments?: number }).serverAttachments ?? -1 < 0
-            ? "?"
-            : `${(r as unknown as { serverAttachments?: number }).serverAttachments}`,
-        ],
-        [
-          "Folder",
-          r.localFolders,
-          (r as unknown as { serverFolders?: number }).serverFolders ?? -1 < 0
-            ? "?"
-            : `${(r as unknown as { serverFolders?: number }).serverFolders}`,
-        ],
+        ["Lampiran", r.localAttachments, serverAtt === undefined || serverAtt < 0 ? "?" : `${serverAtt}`],
+        ["Folder", r.localFolders, serverFld === undefined || serverFld < 0 ? "?" : `${serverFld}`],
         ["Total file", r.localFiles, "—"],
       ];
       for (const [label, lokal, server] of rows) {

@@ -535,15 +535,9 @@ export class NoteSyncManager {
 
   // ============ FORCE SYNC: buat server 100% sama dengan lokal ============
 
-  async forcePushAllToServer(
-    onProgress?: (msg: string) => void
-  ) {
-    if (!this.conn) throw new Error("belum terhubung ke server");
-    const progress = (msg: string) => {
-      onProgress?.(msg);
-    };
-    // 1) matikan SEMUA timer persist dulu — debounce/flush loop masih bisa
-    //    menulis index lama kembali ke disk SETELAH archive (race → ID dobel)
+  async prepareFreshPush() {
+    // Dipanggil SEBELUM koneksi dibuka: bersihkan seluruh state lama supaya
+    // sync-exchange saat reconnect TIDAK mengirim ID lama (akar dobel).
     this.stopFlushLoop();
     for (const t of this.persistTimers.values()) window.clearTimeout(t);
     this.persistTimers.clear();
@@ -561,11 +555,17 @@ export class NoteSyncManager {
     this.attachSeen = {};
     this.hiddenSeen = {};
     this.index = {};
-    progress("Membersihkan data sync lokal…");
     await this.store.archive();
     await this.store.ensureDir();
     await this.store.writeIndex({});
-    // 2) daftarkan ulang semua file lokal (index disk sekarang benar-benar kosong)
+  }
+
+  async executeFreshPush(onProgress?: (msg: string) => void) {
+    if (!this.conn) throw new Error("belum terhubung ke server");
+    const progress = (msg: string) => {
+      onProgress?.(msg);
+    };
+    this.resumeAfterReset();
     progress("Memindai ulang seluruh isi vault…");
     await this.init(true);
     progress("Mendaftarkan folder…");
@@ -574,8 +574,6 @@ export class NoteSyncManager {
     await this.initAttachments();
     progress("Menyiapkan pengaturan…");
     await this.initHiddenFiles();
-    this.resumeAfterReset();
-    // 3) kirim full state semua note ke server
     progress("Mengunggah catatan ke server…");
     await this.sendSyncSteps(this.conn);
     let sent = 0;
@@ -591,6 +589,11 @@ export class NoteSyncManager {
       await sleep0();
     }
     progress(`Pengunggahan selesai (${total} catatan).`);
+  }
+
+  async forcePushAllToServer(onProgress?: (msg: string) => void) {
+    await this.prepareFreshPush();
+    await this.executeFreshPush(onProgress);
   }
 
   async folderDiagnostic(): Promise<{ local: number; meta: number }> {

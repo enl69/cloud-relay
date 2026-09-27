@@ -296,9 +296,12 @@ export default class CloudRelayPlugin extends Plugin {
         method: "POST",
       });
 
-      // 2) reconnect bersih — buat koneksi BARU dan pastikan WS benar-benar
-      //    terbuka SEBELUM push (bug lama: forcePush pegang conn lama yang
-      //    sudah mati → push senyap gagal)
+      // 2) bersihkan state lokal DULU (sebelum koneksi dibuka!) —
+      //    kalau tidak, sync-exchange reconnect mengirim ID lama → dobel
+      progress("Membersihkan data sync lokal…");
+      await this.syncManager?.prepareFreshPush();
+
+      // 3) reconnect bersih — koneksi BARU dengan state kosong
       this.stopSync();
       this.startSync();
 
@@ -317,10 +320,8 @@ export default class CloudRelayPlugin extends Plugin {
       });
       await waitOpen;
 
-      // 3) rebuild lokal dari file fisik + push full state SEMUA dokumen
-      await this.syncManager?.forcePushAllToServer(
-        (msg) => progress(msg)
-      );
+      // 4) rebuild lokal dari file fisik + push full state SEMUA dokumen
+      await this.syncManager?.executeFreshPush((msg) => progress(msg));
 
       // 4) tulis info device terbaru
       progress("Memperbarui info device…");
