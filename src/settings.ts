@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS: CloudRelaySettings = {
   vaultToken: "",
   adminToken: "",
   isPrimary: false,
+  // default OFF: user mengaktifkan manual setelah yakin server benar —
+  // mengurangi risiko device baru mengotori server begitu terpasang
   enabled: false,
   maxNoteMB: 0,
   hiddenSync: true,

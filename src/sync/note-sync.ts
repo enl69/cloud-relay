@@ -912,9 +912,15 @@ export class NoteSyncManager {
     this.pendingPush.clear();
     for (const id of ids) {
       if (this.index[id]?.deleted) continue;
-      await this.ensureDoc(id, this.index[id]?.path ?? "");
+      const path = this.index[id]?.path ?? "";
+      // ANTI-HANTU: note tanpa path terdaftar = kandidat dokumen kosong —
+      // jangan pernah di-flush ke server
+      if (!path) continue;
+      await this.ensureDoc(id, path);
       const entry = this.docs.get(id);
       if (!entry) continue;
+      // dokumen tanpa isi & tanpa meta path = hantu — skip
+      if (entry.text.length === 0 && !entry.meta.get("path")) continue;
       const update = Y.encodeStateAsUpdate(entry.doc);
       conn.send(encodeFrame(MSG_UPDATE, id, update));
     }
@@ -930,15 +936,22 @@ export class NoteSyncManager {
   }
 
   async reset() {
+    this.stopFlushLoop();
     for (const t of this.persistTimers.values()) window.clearTimeout(t);
     this.persistTimers.clear();
     if (this.indexTimer !== null) window.clearTimeout(this.indexTimer);
     this.indexTimer = null;
     this.selfWrites.clear();
+    // KRITIS: antrian pendingPush berisi ID dari sesi SEBELUM reset — kalau
+    // tidak dibersihkan, flush saat connect mengirim dokumen kosong (hantu)
+    this.pendingPush.clear();
+    this.localDirty.clear();
     this.index = {};
     this.docs.clear();
     this.svCache.clear();
     this.applyingRemoteByPath.clear();
+    this.attachSeen = {};
+    this.hiddenSeen = {};
     await this.store.archive();
     await this.store.ensureDir();
     await this.store.writeIndex(this.index);
@@ -964,10 +977,12 @@ export class NoteSyncManager {
     });
     if (!ids.includes(FOLDER_ID)) ids.push(FOLDER_ID);
     if (!ids.includes(DEVICES_ID)) ids.push(DEVICES_ID);
+    if (!ids.includes(ATTACH_ID)) ids.push(ATTACH_ID);
     if (this.hiddenSyncEnabled && !ids.includes(HIDDEN_ID)) ids.push(HIDDEN_ID);
     for (const id of ids) {
       if (id === FOLDER_ID) await this.ensureDoc(FOLDER_ID, "");
       if (id === HIDDEN_ID) await this.ensureDoc(HIDDEN_ID, "");
+      if (id === ATTACH_ID) await this.ensureDoc(ATTACH_ID, "");
       let sv = this.svCache.get(id);
       if (!sv) {
         await this.ensureDoc(id, this.index[id]?.path);

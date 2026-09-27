@@ -471,6 +471,31 @@ function makeConn() {
     assert.equal(new Set(Object.values(manager.diagnostic().pathById)).size, 2, "path unik");
   });
 
+
+  console.log("\n=== INTEGRATION: reset membersihkan pendingPush (anti-hantu) ===");
+  await test("ID di antrian pendingPush tidak terkirim setelah reset", async () => {
+    const vault = new MockVault();
+    const { manager } = makeManager(vault);
+    const frames = [];
+    manager.setConn(null); // belum connect → init mengisi pendingPush
+    vault.fsWrite("h1.md", "isi h1");
+    vault.fsWrite("h2.md", "isi h2");
+    await manager.init(); // conn null → onFileModify → pendingPush terisi
+    await settle();
+    // reset (seperti tombol Kosongkan & ikuti)
+    await manager.reset();
+    // connect
+    const conn = { send: (f) => { frames.push(M.decodeFrame(f)); } };
+    manager.setConn(conn);
+    await settle();
+    const updates = frames.filter((f) => f.type === 3);
+    assert.equal(
+      updates.length,
+      0,
+      `tidak boleh ada UPDATE terkirim dari ID stale, dapat ${updates.length}`
+    );
+  });
+
   console.log(`\n=== HASIL: ${passed} lulus, ${failed} gagal ===`);
   if (failed > 0) {
     console.log("\nDetail kegagalan:");
