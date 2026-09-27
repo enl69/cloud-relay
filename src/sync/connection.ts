@@ -148,6 +148,10 @@ export class RelayConnection {
     }
   }
 
+  isOpen(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
   send(frame: Uint8Array) {
     const ws = this.ws;
     if (ws && ws.readyState === WebSocket.OPEN) {

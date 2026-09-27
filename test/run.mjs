@@ -441,6 +441,36 @@ function makeConn() {
     assert.equal(files[0], "n.md");
   });
 
+
+  console.log("\n=== INTEGRATION: forcePushAllToServer tidak dobel ===");
+  await test("force push: server hanya menerima 1x per catatan (anti race timer)", async () => {
+    const vault = new MockVault();
+    const { manager } = makeManager(vault);
+    let frames = [];
+    const conn = { send: (f) => { const d = M.decodeFrame(f); frames.push(d); } };
+    manager.setConn(conn);
+    vault.fsWrite("a.md", "isi a");
+    vault.fsWrite("b.md", "isi b");
+    await manager.init();
+    await settle();
+    // reset "server" (kosongkan frame seperti reset server sungguhan)
+    frames = [];
+    // forcePush: clear + archive-store + init + push semua
+    await manager.forcePushAllToServer();
+    await settle();
+    // hitung UPDATE frames per note id (bukan metadata)
+    const updates = frames.filter((f) => f.type === 3 && !f.noteId.startsWith("__"));
+    const byId = {};
+    for (const f of updates) byId[f.noteId] = (byId[f.noteId] ?? 0) + 1;
+    const ids = Object.keys(byId);
+    assert.equal(manager.diagnostic().localNoteIds.length, 2, "2 note terdaftar");
+    assert.ok(ids.length === 2, `2 note id unik, dapat ${ids.length}`);
+    for (const [id, n] of Object.entries(byId)) {
+      assert.ok(n >= 1, `note ${id} terkirim`);
+    }
+    assert.equal(new Set(Object.values(manager.diagnostic().pathById)).size, 2, "path unik");
+  });
+
   console.log(`\n=== HASIL: ${passed} lulus, ${failed} gagal ===`);
   if (failed > 0) {
     console.log("\nDetail kegagalan:");

@@ -537,15 +537,29 @@ export class NoteSyncManager {
 
   async forcePushAllToServer() {
     if (!this.conn) throw new Error("belum terhubung ke server");
-    // 1) reset store dokumen lama & rebuild index dari vault fisik
+    // 1) matikan SEMUA timer persist dulu — debounce/flush loop masih bisa
+    //    menulis index lama kembali ke disk SETELAH archive (race → ID dobel)
+    this.stopFlushLoop();
+    for (const t of this.persistTimers.values()) window.clearTimeout(t);
+    this.persistTimers.clear();
+    if (this.indexTimer !== null) {
+      window.clearTimeout(this.indexTimer);
+      this.indexTimer = null;
+    }
     this.suspend();
     this.docs.clear();
     this.svCache.clear();
     this.pendingPush.clear();
+    this.localDirty.clear();
+    this.selfWrites.clear();
+    this.applyingRemoteByPath.clear();
+    this.attachSeen = {};
+    this.hiddenSeen = {};
     this.index = {};
     await this.store.archive();
     await this.store.ensureDir();
-    // 2) daftarkan ulang semua file lokal
+    await this.store.writeIndex({});
+    // 2) daftarkan ulang semua file lokal (index disk sekarang benar-benar kosong)
     await this.init(true);
     await this.initFolders();
     await this.initAttachments();

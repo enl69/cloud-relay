@@ -257,33 +257,67 @@ export default class CloudRelayPlugin extends Plugin {
 
   private scanning = false;
 
-  async rescanVault() {
+  async rescanVault(): Promise<boolean> {
     if (this.scanning) {
       new Notice("Cloud Relay: sinkronisasi sedang berjalan, tunggu selesai…");
-      return;
+      return false;
     }
     this.scanning = true;
     try {
-      new Notice("Cloud Relay: menyamakan server dengan vault ini (100%)…");
+      new Notice("Cloud Relay: mengosongkan server…");
       // 1) hapus SEMUA isi server vault
       await requestUrl({
         url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/reset?token=${encodeURIComponent(this.settings.vaultToken)}`,
         method: "POST",
       });
-      // 2) reconnect bersih
+
+      // 2) reconnect bersih — buat koneksi BARU dan pastikan WS benar-benar
+      //    terbuka SEBELUM push (bug lama: forcePush pegang conn lama yang
+      //    sudah mati → push senyap gagal)
       this.stopSync();
       this.startSync();
-      await new Promise((r) => window.setTimeout(r, 3000));
-      // 3) rebuild lokal dari file fisik + push full state
+
+      const waitOpen = new Promise<void>((resolve, reject) => {
+        const t = window.setTimeout(
+          () => reject(new Error("koneksi server tidak terbuka dalam 15 detik")),
+          15000
+        );
+        const poll = window.setInterval(() => {
+          if (this.connection && this.connection.isOpen()) {
+            window.clearInterval(poll);
+            window.clearTimeout(t);
+            resolve();
+          }
+        }, 250);
+      });
+      await waitOpen;
+
+      // 3) rebuild lokal dari file fisik + push full state SEMUA dokumen
+      new Notice("Cloud Relay: mengunggah vault ke server…");
       await this.syncManager?.forcePushAllToServer();
+
       // 4) tulis info device terbaru
       await this.syncManager?.updateOwnDeviceInfo(
         this.settings.isPrimary ? "sumber pertama" : "pengikut"
       );
+
+      // 5) verifikasi: jumlah catatan server harus == jumlah lokal
+      await new Promise((r) => window.setTimeout(r, 2500));
+      const local = this.app.vault.getMarkdownFiles().length;
+      const serverIds = await this.fetchVaultNoteIds();
+      if (serverIds !== null && serverIds.length !== local) {
+        new Notice(
+          `Cloud Relay: perlu dicek — server ${serverIds.length} vs lokal ${local}. Klik Cek sekarang.`,
+          8000
+        );
+        return false;
+      }
       new Notice("Cloud Relay: server kini 100% sama dengan vault ini ✓");
+      return true;
     } catch (e) {
       new Notice(`Cloud Relay: sinkronisasi paksa gagal — ${e}`);
       console.error("cloud-relay: force sync gagal", e);
+      return false;
     } finally {
       this.scanning = false;
     }
