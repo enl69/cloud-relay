@@ -232,7 +232,8 @@ export default class CloudRelayPlugin extends Plugin {
         method: "GET",
       });
       const body = res.json as unknown as { note_ids: string[] };
-      return body.note_ids;
+      // buang dokumen metadata internal dari hitungan catatan nyata
+      return body.note_ids.filter((id) => !id.startsWith("__"));
     } catch {
       return null;
     }
