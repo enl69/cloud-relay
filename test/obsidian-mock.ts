@@ -126,3 +126,17 @@ export function requestUrl(opts: {
 export function normalizePath(p: string) {
   return p;
 }
+
+export const Platform = {
+  isDesktop: true,
+  isMobile: false,
+  isDesktopApp: true,
+  isMobileApp: false,
+  isIosApp: false,
+  isAndroidApp: false,
+  isPhone: false,
+  isTablet: false,
+  isMacOS: true,
+  isWin: false,
+  isLinux: false,
+};
