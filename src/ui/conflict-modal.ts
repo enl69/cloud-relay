@@ -56,15 +56,14 @@ export class ConflictModal extends Modal {
 
     // area pratinjau hasil
     const previewEl = contentEl.createDiv({
-      cls: "cloud-relay-conflict-preview-result",
+      cls: "cloud-relay-conflict-preview-result is-hidden",
     });
-    previewEl.style.display = "none";
     previewEl.createEl("h4", { text: "Pratinjau versi yang akan dipakai" });
     const previewPre = previewEl.createEl("pre", { text: "" });
 
     const renderPreview = (choice: Choice) => {
       this.selected = choice;
-      previewEl.style.display = "block";
+      previewEl.removeClass("is-hidden");
       previewPre.setText(
         buildResult(choice, this.conflict.local, this.conflict.remote).slice(
           0,

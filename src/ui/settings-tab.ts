@@ -466,8 +466,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       const card = containerEl.createDiv({ cls: "cloud-relay-check-card" });
 
       const devices = this.plugin.listDevices();
-      const devTitle = card.createEl("h4", { text: "Device di vault ini" });
-      void devTitle;
+      new Setting(containerEl).setName("Device di vault ini").setHeading();
       const devList = card.createEl("ul", { cls: "cloud-relay-device-list" });
       if (devices.length === 0) {
         devList.createEl("li", { text: "Belum ada info device (hubungkan minimal 1 device)." });
@@ -481,8 +480,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         );
       }
 
-      const cmpTitle = card.createEl("h4", { text: "Perbandingan dengan server" });
-      void cmpTitle;
+      new Setting(containerEl).setName("Perbandingan dengan server").setHeading();
       const table = card.createEl("table", { cls: "cloud-relay-check-table" });
       const head = table.createEl("tr");
       head.createEl("th", { text: "" });

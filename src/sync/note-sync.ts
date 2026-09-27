@@ -1,4 +1,4 @@
-import { App, Notice, requestUrl, TFile, Vault } from "obsidian";
+import { App, Notice, Platform, requestUrl, TFile, Vault } from "obsidian";
 import * as Y from "yjs";
 
 import { encodeFrame, MSG_SYNC_STEP1, MSG_SYNC_STEP2, MSG_UPDATE } from "./protocol";
@@ -473,22 +473,18 @@ export class NoteSyncManager {
   }
 
   private detectDeviceName(): string {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua)) {
-      const m = ua.match(/Android.*;\s([^;)]+)\s+Build/i);
-      if (m) return m[1];
-      return "Android";
-    }
-    if (/iPhone|iPad|iPod/i.test(ua)) return "iPhone/iPad";
-    if (/Macintosh|Mac OS X/i.test(ua)) return "Mac";
-    if (/Windows/i.test(ua)) return "Windows PC";
-    if (/Linux/i.test(ua)) return "Linux";
+    // Platform API resmi Obsidian (BUKAN navigator — aturan review)
+    if (Platform.isAndroidApp) return "Android";
+    if (Platform.isIosApp) return "iPhone/iPad";
+    if (Platform.isMacOS) return "Mac";
+    if (Platform.isWin) return "Windows PC";
+    if (Platform.isLinux) return "Linux";
     return "Device";
   }
 
   async updateOwnDeviceInfo(role: "sumber pertama" | "pengikut") {
     await this.ensureDoc(DEVICES_ID, "");
-    const map = this.docMap(DEVICES_ID) as unknown as Y.Map<DeviceInfo> | null;
+    const map = this.docMap(DEVICES_ID) as Y.Map<DeviceInfo> | null;
     if (!map) return;
     const vaultAll = this.vault.getFiles().filter((f) => !f.path.startsWith(this.app.vault.configDir));
     const notes = this.vault.getMarkdownFiles().length;
@@ -497,7 +493,7 @@ export class NoteSyncManager {
     const id = this.deviceId;
     map.set(id, {
       name: this.detectDeviceName(),
-      platform: /Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile" : "desktop",
+      platform: Platform.isMobile ? "mobile" : "desktop",
       role,
       files,
       folders,
@@ -508,7 +504,7 @@ export class NoteSyncManager {
   }
 
   listDevices(): DeviceInfo[] {
-    const map = this.docMap(DEVICES_ID) as unknown as Y.Map<DeviceInfo> | null;
+    const map = this.docMap(DEVICES_ID) as Y.Map<DeviceInfo> | null;
     if (!map) return [];
     return Array.from(map.values()).sort((a, b) => b.lastSeen - a.lastSeen);
   }
@@ -1448,7 +1444,6 @@ export class NoteSyncManager {
             const existing = await this.vault.read(targetOccupant);
             sameContent = existing === newContent;
           } catch { /* sengaja diabaikan */ }
-          const occupantId = this.findNoteIdByPath(renameTarget);
           if (sameContent) {
             // isi sama: file sudah mewakili konten ini di path target.
             // Hapus file lama (duplikat), ikat note ini ke path target.

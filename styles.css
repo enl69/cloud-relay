@@ -115,3 +115,6 @@ p.cloud-relay-ok {
   color: var(--text-success);
   font-weight: var(--font-semibold);
 }
+.cloud-relay-conflict-preview-result.is-hidden {
+  display: none;
+}
