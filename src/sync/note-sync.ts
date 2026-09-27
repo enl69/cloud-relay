@@ -954,7 +954,14 @@ export class NoteSyncManager {
   }
 
   async sendSyncSteps(conn: Conn) {
-    const ids = Object.keys(this.index).filter((id) => !this.index[id].deleted);
+    const ids = Object.keys(this.index).filter((id) => {
+      const e = this.index[id];
+      if (!e || e.deleted) return false;
+      // ANTI-HANTU: note tanpa path & tanpa isi = dokumen hantu — jangan
+      // pernah di-STEP1 (memicu server menyimpan dokumen kosong)
+      if (!e.path) return false;
+      return true;
+    });
     if (!ids.includes(FOLDER_ID)) ids.push(FOLDER_ID);
     if (!ids.includes(DEVICES_ID)) ids.push(DEVICES_ID);
     if (this.hiddenSyncEnabled && !ids.includes(HIDDEN_ID)) ids.push(HIDDEN_ID);

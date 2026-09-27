@@ -86,6 +86,10 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     if (!this.joinReady) return;
     const parsed = this.joinReady;
     this.joinReady = null;
+    // ANTI-HANTU: join ke vault (apapun jalurnya) SELALU reset store —
+    // ID note era vault lama tidak boleh ikut terbawa (memicu dokumen
+    // hantu kosong di server lewat STEP1/STEP2 exchange)
+    await this.plugin.resetLocalSync();
     this.plugin.settings.serverUrl = parsed.serverUrl;
     this.plugin.settings.vaultId = parsed.vaultId;
     this.plugin.settings.vaultToken = parsed.vaultToken;
