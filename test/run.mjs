@@ -496,6 +496,47 @@ function makeConn() {
     );
   });
 
+
+  console.log("\n=== INTEGRATION: ID kanonik lintas device (kasus Android dobel) ===");
+  await test("device kedua init dgn UUID sendiri → ID remote diadopsi, ID lokal pensiun", async () => {
+    const vault = new MockVault();
+    const { manager } = makeManager(vault);
+    // device A sudah sync: file ada, dimiliki ID-A
+    vault.fsWrite("x.md", "sama");
+    await manager.init();
+    await settle();
+    const lokalId = manager.diagnostic().localNoteIds[0];
+
+    // device B (kasus nyata): init membuat UUID sendiri untuk file yg sama
+    const { manager: mB } = makeManager(vault);
+    await mB.init();
+    await settle();
+    const idB = mB.diagnostic().localNoteIds[0];
+    assert.notEqual(idB, lokalId, "B memang punya ID sendiri");
+
+    // B terima update dari server (ID-A, konten identik, path sama)
+    const remote = new Y.Doc();
+    remote.getText("content").insert(0, "sama");
+    remote.getMap("meta").set("path", "x.md");
+    remote.getMap("meta").set("deleted", false);
+    await mB.onUpdate(lokalId, new Uint8Array(Y.encodeStateAsUpdate(remote)));
+    await settle();
+
+    const diag = mB.diagnostic();
+    // ID remote jadi pemilik aktif; ID lokal pensiun (deleted)
+    const aktif = diag.localNoteIds;
+    assert.ok(
+      aktif.includes(lokalId),
+      "ID remote (server) diadopsi sebagai pemilik"
+    );
+    assert.ok(
+      !aktif.includes(idB),
+      "ID lokal B pensiun (tidak dobel di server)"
+    );
+    const activePaths = new Set(Object.values(diag.pathById));
+    assert.equal(activePaths.size, 1, `1 path aktif, dapat ${[...activePaths]}`);
+  });
+
   console.log(`\n=== HASIL: ${passed} lulus, ${failed} gagal ===`);
   if (failed > 0) {
     console.log("\nDetail kegagalan:");

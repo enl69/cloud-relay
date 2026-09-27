@@ -1378,7 +1378,7 @@ export class NoteSyncManager {
         }
       }
       if (idx) idx.deleted = true;
-      this.scheduleIndexWrite();
+      await this.store.writeIndex(this.index);
       entry.lastContent = "";
       entry.lastPath = existingPath;
       await this.persistNow(noteId);
@@ -1406,12 +1406,23 @@ export class NoteSyncManager {
           } catch { /* sengaja diabaikan */ }
           if (sameContent) {
             if (occupantId) {
-              // pemilik terdaftar: note-id ini dobel → tandai deleted diam
-              this.index[noteId] = {
-                path: finalPath!,
+              // Konten identik & path sudah dimiliki ID LOKAL:
+              // ID REMOTE (noteId) adalah identitas kanonik di server —
+              // adopsi ID remote sebagai pemilik, PENSIUNKAN ID lokal.
+              // (Sebaliknya = dobel di server: kedua ID hidup berdampingan)
+              this.index[noteId] = { path: finalPath!, deleted: false };
+              const nfAdopt = this.vault.getAbstractFileByPath(finalPath!);
+              if (nfAdopt instanceof TFile) {
+                this.markSelfWrite(finalPath!, nfAdopt.stat.mtime);
+                this.index[noteId].mtime = nfAdopt.stat.mtime;
+              }
+              this.index[occupantId] = {
+                ...this.index[occupantId],
                 deleted: true,
               };
-              this.scheduleIndexWrite();
+              await this.store.writeIndex(this.index);
+              entry.lastContent = newContent;
+              entry.lastPath = finalPath!;
               await this.persistNow(noteId);
               return;
             }
@@ -1422,7 +1433,7 @@ export class NoteSyncManager {
               this.markSelfWrite(finalPath!, nf.stat.mtime);
               this.index[noteId].mtime = nf.stat.mtime;
             }
-            this.scheduleIndexWrite();
+            await this.store.writeIndex(this.index);
             entry.lastContent = newContent;
             entry.lastPath = finalPath!;
             await this.persistNow(noteId);
@@ -1478,6 +1489,9 @@ export class NoteSyncManager {
           this.markSelfWrite(finalPath, nf.stat.mtime);
           this.index[noteId].mtime = nf.stat.mtime;
         }
+        // I4: registrasi note = tulis index LANGSUNG (debounce bisa hilang
+        // saat crash → init berikutnya membuat UUID baru → dobel di server)
+        await this.store.writeIndex(this.index);
       }
       this.scheduleIndexWrite();
       entry.lastContent = newContent;
