@@ -896,15 +896,34 @@ export class NoteSyncManager {
     if (this.isSelfWrite(file.path, file.stat.mtime)) return;
     if (this.applyingRemoteByPath.has(file.path)) return;
     if (this.guardSize(file)) return;
+    // CEK PATH TERSITA: kalau ada note AKTIF lain yang sudah memegang path ini,
+    // jangan pernah spawn note-ID baru untuk file yang sama (akar dobel).
+    // Kecuali note pemiliknya deleted → boleh adopsi.
     let noteId = this.findNoteIdByPath(file.path);
     let wasKnown = true;
     if (!noteId) {
-      noteId = crypto.randomUUID();
-      this.index[noteId] = { path: file.path, deleted: false, mtime: 0 };
-      wasKnown = false;
-      // note baru: tulis index LANGSUNG (jarang terjadi, murah) —
-      // debounce bisa membuat index disk basi → note-id dobel di init berikutnya
-      void this.store.writeIndex(this.index);
+      const existingEntry = this.findAnyNoteIdByPathIncludingDeleted(file.path);
+      if (existingEntry && !this.index[existingEntry].deleted) {
+        // path sudah dimiliki note aktif lain — cek konsistensi konten:
+        // jika isi sama, ini event dari file yang sama; skip saja (pemilik
+        // note yang akan mengurusnya lewat jalurnya sendiri)
+        const owner = this.docs.get(existingEntry);
+        if (owner && owner.lastContent === content) return;
+        // isi beda → teruskan ke note pemilik sebagai update (bukan note baru)
+        noteId = existingEntry;
+        wasKnown = true;
+      } else if (existingEntry) {
+        // pemilik lama deleted → adopsi ID-nya (revive), bukan ID baru
+        noteId = existingEntry;
+        wasKnown = true;
+      } else {
+        noteId = crypto.randomUUID();
+        this.index[noteId] = { path: file.path, deleted: false, mtime: 0 };
+        wasKnown = false;
+        // note baru: tulis index LANGSUNG (jarang terjadi, murah) —
+        // debounce bisa membuat index disk basi → note-id dobel di init berikutnya
+        void this.store.writeIndex(this.index);
+      }
     }
     const id = noteId;
     const isNewNote = !wasKnown;
@@ -1159,27 +1178,71 @@ export class NoteSyncManager {
         if (occupantId === noteId) {
           // path ditempati note ini sendiri → idempotent, pakai saja
         } else {
-          // ditempati note lain: kalau ISI identik, tidak perlu konflik sama sekali
+          // ditempati note lain ATAU file tanpa pemilik terdaftar:
+          // kalau ISI identik, TIDAK PERLU file konflik sama sekali.
+          // (Kasus dobel berulang: init menemukan file yang belum ter-index
+          // → harusnya diadopsi, bukan dibuatkan salinan konflik.)
           let sameContent = false;
           try {
             const existing = await this.vault.read(occupant);
             sameContent = existing === newContent;
           } catch { /* sengaja diabaikan */ }
           if (sameContent) {
-            // konten sama → jangan buat salinan konflik; note ini mengikuti
-            // path pemilik lama tidak mungkin — cukup tandai note ini sebagai
-            // duplikat diam (file sudah ada di path itu)
             if (occupantId) {
+              // pemilik terdaftar: note-id ini dobel → tandai deleted diam
               this.index[noteId] = {
                 path: finalPath!,
-                deleted: true, // note-id dobel, konten sudah terwakili file pemilik
+                deleted: true,
               };
               this.scheduleIndexWrite();
               await this.persistNow(noteId);
               return;
             }
+            // tidak ada pemilik terdaftar: note ini MENGADOPSI file tersebut
+            this.index[noteId] = { path: finalPath!, deleted: false };
+            const nf = this.vault.getAbstractFileByPath(finalPath!);
+            if (nf instanceof TFile) {
+              this.markSelfWrite(finalPath!, nf.stat.mtime);
+              this.index[noteId].mtime = nf.stat.mtime;
+            }
+            this.scheduleIndexWrite();
+            entry.lastContent = newContent;
+            entry.lastPath = finalPath!;
+            await this.persistNow(noteId);
+            return;
           }
-          finalPath = finalPath!.replace(/(\.md)$/i, " (konflik dari device lain)$1");
+          // isi benar-benar beda (konflik nyata dua versi) → simpan
+          // dengan suffix, TAPI jangan pernah menumpuk suffix ganda
+          let conflictPath = finalPath!.replace(/(\.md)$/i, " (konflik dari device lain)$1");
+          let guard = 0;
+          while (
+            this.vault.getAbstractFileByPath(conflictPath) instanceof TFile &&
+            guard < 50
+          ) {
+            const existing = await this.vault.adapter
+              .read(conflictPath)
+              .catch(() => null);
+            if (existing === newContent) {
+              finalPath = conflictPath;
+              sameContent = true;
+              break;
+            }
+            conflictPath = conflictPath.replace(
+              /(\.md)$/,
+              "-$1"
+            );
+            guard++;
+          }
+          if (sameContent) {
+            // salinan konflik identik sudah ada di disk → adopsi
+            this.index[noteId] = { path: finalPath, deleted: false };
+            this.scheduleIndexWrite();
+            entry.lastContent = newContent;
+            entry.lastPath = finalPath;
+            await this.persistNow(noteId);
+            return;
+          }
+          finalPath = conflictPath;
           entry.doc.transact(() => {
             entry.meta.set("path", finalPath);
           });
@@ -1210,9 +1273,36 @@ export class NoteSyncManager {
         let renameTarget = newPath;
         const targetOccupant = this.vault.getAbstractFileByPath(renameTarget);
         if (targetOccupant instanceof TFile) {
-          // cegah loop: kalau target sudah punya suffix konflik ATAU ditempati
-          // note ini sendiri, jangan menambah suffix lagi
+          // TARGET ditempati: cek isi dulu — jika identik, ini bukan konflik,
+          // hanya dua note-ID untuk file yang sama → JANGAN rename/suffix.
+          let sameContent = false;
+          try {
+            const existing = await this.vault.read(targetOccupant);
+            sameContent = existing === newContent;
+          } catch { /* sengaja diabaikan */ }
           const occupantId = this.findNoteIdByPath(renameTarget);
+          if (sameContent) {
+            // isi sama: file sudah mewakili konten ini di path target.
+            // Hapus file lama (duplikat), ikat note ini ke path target.
+            try {
+              this.applyingRemoteByPath.add(existingPath);
+              await this.app.fileManager.trashFile(file);
+              this.applyingRemoteByPath.delete(existingPath);
+            } catch (e) {
+              console.error("cloud-relay: gagal hapus duplikat", existingPath, e);
+            }
+            idx.path = renameTarget;
+            const nf = this.vault.getAbstractFileByPath(renameTarget);
+            if (nf instanceof TFile) {
+              this.markSelfWrite(renameTarget, nf.stat.mtime);
+              idx.mtime = nf.stat.mtime;
+            }
+            this.scheduleIndexWrite();
+            entry.lastContent = newContent;
+            entry.lastPath = renameTarget;
+            await this.persistNow(noteId);
+            return;
+          }
           const alreadySuffixed = renameTarget.includes("(konflik dari device lain)");
           if (occupantId !== noteId && !alreadySuffixed) {
             renameTarget = renameTarget.replace(
@@ -1223,7 +1313,6 @@ export class NoteSyncManager {
               entry.meta.set("path", renameTarget);
             });
           } else if (occupantId === noteId) {
-            // file target adalah milik note ini — cukup hapus duplikat lama
             renameTarget = newPath;
           }
         }
@@ -1375,6 +1464,13 @@ export class NoteSyncManager {
       console.warn("cloud-relay: note terlalu besar, skip", file.path, file.stat.size);
     }
     return true;
+  }
+
+  private findAnyNoteIdByPathIncludingDeleted(path: string): string | null {
+    for (const [id, entry] of Object.entries(this.index)) {
+      if (entry.path === path) return id;
+    }
+    return null;
   }
 
   private findNoteIdByPath(path: string): string | null {

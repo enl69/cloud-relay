@@ -407,6 +407,36 @@ function makeConn() {
     assert.equal(diag.localNoteIds.length, 0, "tidak tersisa di index aktif");
   });
 
+
+  console.log("\n=== INTEGRATION: anti-dobel (regression: 2x kejadian user) ===");
+  await test("note remote + init + modify lokal + resend + restart = 1 file tanpa konflik", async () => {
+    const vault = new MockVault();
+    const { manager } = makeManager(vault);
+    const remote = new Y.Doc();
+    remote.getText("content").insert(0, "isi penting");
+    remote.getMap("meta").set("path", "n.md");
+    remote.getMap("meta").set("deleted", false);
+    await manager.onUpdate("ID-X", new Uint8Array(Y.encodeStateAsUpdate(remote)));
+    await settle();
+    await manager.init();
+    await settle();
+    assert.equal(manager.diagnostic().localNoteIds.length, 1, "1 note setelah init");
+    vault.fsWrite("n.md", "isi penting");
+    manager.onFileModify(vault.getAbstractFileByPath("n.md"), "isi penting");
+    await settle();
+    assert.equal(manager.diagnostic().localNoteIds.length, 1, "1 note setelah modify");
+    await manager.onUpdate("ID-X", new Uint8Array(Y.encodeStateAsUpdate(remote)));
+    await settle();
+    let files = Array.from(vault.adapter.files.keys()).filter((k) => k.endsWith(".md"));
+    assert.equal(files.length, 1, `tanpa konflik: ${files}`);
+    assert.equal(files[0], "n.md");
+    await manager.init();
+    await settle();
+    files = Array.from(vault.adapter.files.keys()).filter((k) => k.endsWith(".md"));
+    assert.equal(files.length, 1, "tetap 1 file setelah restart");
+    assert.equal(files[0], "n.md");
+  });
+
   console.log(`\n=== HASIL: ${passed} lulus, ${failed} gagal ===`);
   if (failed > 0) {
     console.log("\nDetail kegagalan:");
