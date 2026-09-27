@@ -225,6 +225,28 @@ export default class CloudRelayPlugin extends Plugin {
     }
   }
 
+  async fetchVaultCounts(): Promise<{
+    notes: number;
+    attachments: number;
+    folders: number;
+    devices: number;
+  } | null> {
+    try {
+      const res = await requestUrl({
+        url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/counts?token=${encodeURIComponent(this.settings.vaultToken)}`,
+        method: "GET",
+      });
+      return res.json as unknown as {
+        notes: number;
+        attachments: number;
+        folders: number;
+        devices: number;
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async fetchVaultNoteIds(): Promise<string[] | null> {
     try {
       const res = await requestUrl({
@@ -257,14 +279,17 @@ export default class CloudRelayPlugin extends Plugin {
 
   private scanning = false;
 
-  async rescanVault(): Promise<boolean> {
+  async rescanVault(onProgress?: (msg: string) => void): Promise<boolean> {
+    const progress = (msg: string) => {
+      onProgress?.(msg);
+    };
     if (this.scanning) {
       new Notice("Cloud Relay: sinkronisasi sedang berjalan, tunggu selesai…");
       return false;
     }
     this.scanning = true;
     try {
-      new Notice("Cloud Relay: mengosongkan server…");
+      progress("Mengosongkan server…");
       // 1) hapus SEMUA isi server vault
       await requestUrl({
         url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/reset?token=${encodeURIComponent(this.settings.vaultToken)}`,
@@ -293,28 +318,38 @@ export default class CloudRelayPlugin extends Plugin {
       await waitOpen;
 
       // 3) rebuild lokal dari file fisik + push full state SEMUA dokumen
-      new Notice("Cloud Relay: mengunggah vault ke server…");
-      await this.syncManager?.forcePushAllToServer();
+      await this.syncManager?.forcePushAllToServer(
+        (msg) => progress(msg)
+      );
 
       // 4) tulis info device terbaru
+      progress("Memperbarui info device…");
       await this.syncManager?.updateOwnDeviceInfo(
         this.settings.isPrimary ? "sumber pertama" : "pengikut"
       );
 
       // 5) verifikasi: jumlah catatan server harus == jumlah lokal
+      progress("Memverifikasi hasil di server…");
       await new Promise((r) => window.setTimeout(r, 2500));
       const local = this.app.vault.getMarkdownFiles().length;
-      const serverIds = await this.fetchVaultNoteIds();
-      if (serverIds !== null && serverIds.length !== local) {
+      const counts = await this.fetchVaultCounts();
+      if (counts !== null && counts.notes !== local) {
+        progress(
+          `Selesai dengan catatan: server ${counts.notes} vs lokal ${local}. Klik Cek sekarang.`
+        );
         new Notice(
-          `Cloud Relay: perlu dicek — server ${serverIds.length} vs lokal ${local}. Klik Cek sekarang.`,
+          `Cloud Relay: perlu dicek — server ${counts.notes} vs lokal ${local}. Klik Cek sekarang.`,
           8000
         );
         return false;
       }
+      progress(
+        `Selesai ✓ Server kini 100% sama: ${local} catatan, ${counts?.attachments ?? "?"} lampiran, ${counts?.folders ?? "?"} folder.`
+      );
       new Notice("Cloud Relay: server kini 100% sama dengan vault ini ✓");
       return true;
     } catch (e) {
+      progress(`Gagal: ${e}`);
       new Notice(`Cloud Relay: sinkronisasi paksa gagal — ${e}`);
       console.error("cloud-relay: force sync gagal", e);
       return false;
@@ -346,8 +381,13 @@ export default class CloudRelayPlugin extends Plugin {
   async syncSummary() {
     const base = await this.syncManager?.syncSummary();
     if (!base) return null;
-    const serverIds = await this.fetchVaultNoteIds();
-    return { ...base, serverNotes: serverIds === null ? -1 : serverIds.length };
+    const counts = await this.fetchVaultCounts();
+    return {
+      ...base,
+      serverNotes: counts === null ? -1 : counts.notes,
+      serverAttachments: counts === null ? -1 : counts.attachments,
+      serverFolders: counts === null ? -1 : counts.folders,
+    };
   }
 
   async resetServerVault(): Promise<boolean> {

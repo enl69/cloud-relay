@@ -28,6 +28,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
   private disconnectArmed = false;
   private recoverArmed = false;
   private forceArmed = false;
+  private forceProgress: string | null = null;
   private checkResult: Awaited<ReturnType<CloudRelayPlugin["syncSummary"]>> | null = null;
 
   constructor(app: App, plugin: CloudRelayPlugin) {
@@ -488,8 +489,20 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       head.createEl("th", { text: "Server" });
       const rows: Array<[string, number, string]> = [
         ["Catatan", r.localNotes, r.serverNotes < 0 ? "?" : `${r.serverNotes}`],
-        ["Lampiran", r.localAttachments, "—"],
-        ["Folder", r.localFolders, "—"],
+        [
+          "Lampiran",
+          r.localAttachments,
+          (r as unknown as { serverAttachments?: number }).serverAttachments ?? -1 < 0
+            ? "?"
+            : `${(r as unknown as { serverAttachments?: number }).serverAttachments}`,
+        ],
+        [
+          "Folder",
+          r.localFolders,
+          (r as unknown as { serverFolders?: number }).serverFolders ?? -1 < 0
+            ? "?"
+            : `${(r as unknown as { serverFolders?: number }).serverFolders}`,
+        ],
         ["Total file", r.localFiles, "—"],
       ];
       for (const [label, lokal, server] of rows) {
@@ -534,11 +547,22 @@ export class CloudRelaySettingTab extends PluginSettingTab {
             return;
           }
           this.forceArmed = false;
+          this.forceProgress = "Memulai…";
           btn.setDisabled(true);
           btn.setButtonText("Menyamakan…");
+          this.display();
           try {
-            await this.plugin.rescanVault();
+            const ok = await this.plugin.rescanVault((msg) => {
+              this.forceProgress = msg;
+              const el = containerEl.querySelector(".cloud-relay-force-progress");
+              if (el instanceof HTMLElement) el.setText(msg);
+            });
+            this.forceProgress = null;
             this.checkResult = await this.plugin.syncSummary();
+            if (!ok) new Notice("Cloud Relay: selesai dengan catatan — lihat panel hasil.", 6000);
+          } catch (e) {
+            this.forceProgress = null;
+            new Notice(`Cloud Relay: gagal — ${e}`);
           } finally {
             btn.setDisabled(false);
             btn.setButtonText("Samakan sekarang");
@@ -546,6 +570,12 @@ export class CloudRelaySettingTab extends PluginSettingTab {
           }
         })
       );
+
+    if (this.forceProgress !== null) {
+      const p = containerEl.createDiv({ cls: "cloud-relay-force-progress" });
+      p.createEl("span", { cls: "cloud-relay-spinner", text: "↻" });
+      p.createSpan({ text: ` ${this.forceProgress}` });
+    }
 
     new Setting(containerEl)
       .setName("Opsi berbahaya")

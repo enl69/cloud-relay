@@ -535,8 +535,13 @@ export class NoteSyncManager {
 
   // ============ FORCE SYNC: buat server 100% sama dengan lokal ============
 
-  async forcePushAllToServer() {
+  async forcePushAllToServer(
+    onProgress?: (msg: string) => void
+  ) {
     if (!this.conn) throw new Error("belum terhubung ke server");
+    const progress = (msg: string) => {
+      onProgress?.(msg);
+    };
     // 1) matikan SEMUA timer persist dulu — debounce/flush loop masih bisa
     //    menulis index lama kembali ke disk SETELAH archive (race → ID dobel)
     this.stopFlushLoop();
@@ -556,25 +561,36 @@ export class NoteSyncManager {
     this.attachSeen = {};
     this.hiddenSeen = {};
     this.index = {};
+    progress("Membersihkan data sync lokal…");
     await this.store.archive();
     await this.store.ensureDir();
     await this.store.writeIndex({});
     // 2) daftarkan ulang semua file lokal (index disk sekarang benar-benar kosong)
+    progress("Memindai ulang seluruh isi vault…");
     await this.init(true);
+    progress("Mendaftarkan folder…");
     await this.initFolders();
+    progress("Mengunggah lampiran…");
     await this.initAttachments();
+    progress("Menyiapkan pengaturan…");
     await this.initHiddenFiles();
     this.resumeAfterReset();
     // 3) kirim full state semua note ke server
+    progress("Mengunggah catatan ke server…");
     await this.sendSyncSteps(this.conn);
+    let sent = 0;
+    const total = Array.from(this.docs.keys()).filter((k) => !k.startsWith("__")).length;
     for (const [id] of this.docs) {
       if (id.startsWith("__")) continue;
       const entry = this.docs.get(id);
       if (!entry) continue;
       const full = Y.encodeStateAsUpdate(entry.doc);
       this.conn.send(encodeFrame(MSG_UPDATE, id, new Uint8Array(full)));
+      sent++;
+      if (sent % 10 === 0) progress(`Mengunggah catatan ${sent}/${total}…`);
       await sleep0();
     }
+    progress(`Pengunggahan selesai (${total} catatan).`);
   }
 
   async folderDiagnostic(): Promise<{ local: number; meta: number }> {
