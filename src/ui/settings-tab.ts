@@ -466,6 +466,36 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Kosongkan dan ikuti server")
+      .setDesc("Hapus isi vault lokal ini, lalu tarik ulang 100% data yang tersimpan di server. Server tidak diubah.")
+      .addButton((btn) =>
+        btn.setButtonText("Ikuti server ulang").onClick(async () => {
+          if (!this.recoverArmed) {
+            this.recoverArmed = true;
+            btn.setButtonText("YAKIN? Hapus vault lokal");
+            window.setTimeout(() => {
+              if (this.recoverArmed) {
+                this.recoverArmed = false;
+                this.display();
+              }
+            }, 6000);
+            return;
+          }
+          this.recoverArmed = false;
+          btn.setDisabled(true);
+          btn.setButtonText("Mengikuti server…");
+          try {
+            const ok = await this.plugin.refreshFromServer((message) => btn.setButtonText(message));
+            if (ok) this.checkResult = await this.plugin.syncSummary();
+          } finally {
+            btn.setDisabled(false);
+            btn.setButtonText("Ikuti server ulang");
+            this.display();
+          }
+        })
+      );
+
     if (this.checkResult) {
       const r = this.checkResult;
       const card = containerEl.createDiv({ cls: "cloud-relay-check-card" });

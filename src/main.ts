@@ -461,6 +461,64 @@ export default class CloudRelayPlugin extends Plugin {
     return true;
   }
 
+  async refreshFromServer(onProgress?: (message: string) => void): Promise<boolean> {
+    if (!this.syncManager || !this.settings.vaultId) return false;
+    if (this.scanning) return false;
+    this.scanning = true;
+    const progress = (message: string) => onProgress?.(message);
+    try {
+      progress("Memeriksa jumlah data server…");
+      const before = await this.fetchVaultCounts();
+      if (!before) throw new Error("server tidak bisa diverifikasi");
+      this.stopSync();
+      this.syncManager.suspend();
+      progress("Mengosongkan vault lokal…");
+      await this.syncManager.reset();
+      let removed = 0;
+      for (const file of this.app.vault.getFiles()) {
+        try {
+          await this.app.fileManager.trashFile(file);
+          removed++;
+        } catch (e) {
+          console.error("cloud-relay: gagal mengosongkan", file.path, e);
+        }
+      }
+      this.syncManager.resumeAfterReset();
+      await this.saveSettings();
+      progress(`Vault lokal kosong (${removed} file), menarik ${before.notes} catatan dari server…`);
+      this.startSync();
+      const deadline = Date.now() + 60000;
+      let last = -1;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        const counts = await this.fetchVaultCounts();
+        const local = this.app.vault.getMarkdownFiles().length;
+        if (local !== last) {
+          last = local;
+          progress(`Menarik data server… ${local}/${before.notes} catatan`);
+        }
+        if (counts && local === counts.notes && local === before.notes) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          const finalCounts = await this.fetchVaultCounts();
+          const finalLocal = this.app.vault.getMarkdownFiles().length;
+          if (finalCounts && finalLocal === finalCounts.notes && finalLocal === before.notes) {
+            progress(`Selesai: ${finalLocal}/${before.notes} catatan sama dengan server`);
+            new Notice(`Cloud Relay: vault lokal sudah mengikuti server (${finalLocal} catatan) ✓`);
+            return true;
+          }
+        }
+        if (this.connection?.isOpen()) await this.syncManager.sendSyncSteps(this.connection);
+      }
+      throw new Error(`data belum lengkap setelah 60 detik: lokal ${this.app.vault.getMarkdownFiles().length}, server ${before.notes}`);
+    } catch (e) {
+      progress(`Gagal: ${e}`);
+      new Notice(`Cloud Relay: ikuti server gagal — ${e}`);
+      return false;
+    } finally {
+      this.scanning = false;
+    }
+  }
+
   startSync() {
     if (!this.syncManager) return;
     this.syncManager.setHttpTransport({
