@@ -1008,7 +1008,7 @@ export class NoteSyncManager {
         sv = entry ? new Uint8Array(Y.encodeStateVector(entry.doc)) : new Uint8Array(0);
         this.svCache.set(id, sv);
       }
-      if (this.conn && sv.length > 0) {
+      if (this.conn && sv) {
         this.conn.send(encodeFrame(MSG_SYNC_STEP1, id, sv));
       }
     }
@@ -1037,6 +1037,7 @@ export class NoteSyncManager {
   }
 
   onSyncStep1(noteId: string, sv: Uint8Array) {
+    if (this.index[noteId]?.deleted) return;
     void (async () => {
       await this.ensureDoc(noteId, this.index[noteId]?.path ?? "");
       const entry = this.docs.get(noteId);
