@@ -1005,6 +1005,15 @@ export class NoteSyncManager {
         this.conn.send(encodeFrame(MSG_SYNC_STEP1, id, sv));
       }
     }
+    // Ulangi handshake setelah seluruh DOC_LIST diproses. Ini menutup race
+    // ketika frame STEP2 datang saat batch awal masih membuat dokumen lokal.
+    await sleep0();
+    for (const id of noteIds) {
+      const entry = this.docs.get(id);
+      if (this.conn && entry) {
+        this.conn.send(encodeFrame(MSG_SYNC_STEP1, id, new Uint8Array(Y.encodeStateVector(entry.doc))));
+      }
+    }
     this.scheduleIndexWrite();
     this.scheduleInitAttachments();
   }
