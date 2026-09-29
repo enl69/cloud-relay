@@ -1,7 +1,7 @@
 {
   "id": "cloud-relay",
   "name": "Cloud Relay",
-  "version": "0.13.15",
+  "version": "0.13.16",
   "minAppVersion": "1.7.2",
   "description": "Self-hosted vault sync across devices. Real-time per-keystroke, conflict-safe offline edits, mirrors notes, attachments, folders, and settings.",
   "author": "enl69",
