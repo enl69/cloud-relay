@@ -329,6 +329,13 @@ async function waitFor(desc, fn, ms = 8000) {
     );
     const dataB = B.vault.adapter.files.get("img/foto.png").data;
     assert.deepEqual(Array.from(dataB), [10, 20, 30, 40]);
+
+    A.vault.fsWriteBinary("docs/data.pdf", new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]));
+    await A.manager.initAttachments();
+    await B.manager.initAttachments();
+    await waitFor("file non-image sampai B", () => B.vault.adapter.files.has("docs/data.pdf"), 6000);
+    const nonImage = B.vault.adapter.files.get("docs/data.pdf").data;
+    assert.deepEqual(Array.from(nonImage), [37, 80, 68, 70, 45, 49, 46, 55]);
   });
 
   // ============================================================

@@ -269,15 +269,8 @@ export class NoteSyncManager {
       if (this.suspended) return;
       try {
         const seen = this.attachSeen[file.path];
-        if (seen && seen.mtime === file.stat.mtime) {
-          const entry = map.get(file.path);
-          if (!entry || entry.sha !== seen.sha || entry.deleted) {
-            map.set(file.path, {
-              sha: seen.sha,
-              size: file.stat.size,
-              deleted: false,
-            });
-          }
+        const existing = map.get(file.path);
+        if (seen && seen.mtime === file.stat.mtime && existing?.sha === seen.sha && !existing.deleted) {
           continue;
         }
         const buf = await this.vault.readBinary(file);
