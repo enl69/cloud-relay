@@ -994,6 +994,7 @@ export class NoteSyncManager {
   async onDocList(noteIds: string[]) {
     for (const id of noteIds) {
       if (!this.index[id]) this.index[id] = { path: "", deleted: false };
+      else if (this.index[id].deleted) this.index[id].deleted = false;
       let sv = this.svCache.get(id);
       if (!sv) {
         await this.ensureDoc(id, this.index[id].path);
