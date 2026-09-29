@@ -119,6 +119,11 @@ p.cloud-relay-ok {
   display: none;
 }
 
+.cloud-relay-danger-confirm {
+  background-color: var(--background-modifier-error) !important;
+  color: var(--text-on-accent) !important;
+  border-color: var(--text-error) !important;
+}
 .cloud-relay-force-progress {
   display: flex;
   align-items: center;

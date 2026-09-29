@@ -555,53 +555,6 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName("Samakan server ke device ini")
-      .setDesc("Kosongkan server lalu unggah ulang seluruh isi vault ini (catatan, lampiran, folder, pengaturan). Device lain akan mengikuti setelah sync berikutnya. Gunakan di device yang isinya paling benar.")
-      .addButton((btn) =>
-        btn.setButtonText("Samakan sekarang").onClick(async () => {
-          if (!this.forceArmed) {
-            this.forceArmed = true;
-            btn.setButtonText("YAKIN? Server akan disamakan ke device ini");
-            window.setTimeout(() => {
-              if (this.forceArmed) {
-                this.forceArmed = false;
-                this.display();
-              }
-            }, 6000);
-            return;
-          }
-          this.forceArmed = false;
-          this.forceProgress = "Memulai…";
-          btn.setDisabled(true);
-          btn.setButtonText("Menyamakan…");
-          this.display();
-          try {
-            const ok = await this.plugin.rescanVault((msg) => {
-              this.forceProgress = msg;
-              const el = containerEl.querySelector(".cloud-relay-force-progress");
-              if (el instanceof HTMLElement) el.setText(msg);
-            });
-            this.forceProgress = null;
-            this.checkResult = await this.plugin.syncSummary();
-            if (!ok) new Notice("Cloud Relay: selesai dengan catatan — lihat panel hasil.", 6000);
-          } catch (e) {
-            this.forceProgress = null;
-            new Notice(`Cloud Relay: gagal — ${e}`);
-          } finally {
-            btn.setDisabled(false);
-            btn.setButtonText("Samakan sekarang");
-            this.display();
-          }
-        })
-      );
-
-    if (this.forceProgress !== null) {
-      const p = containerEl.createDiv({ cls: "cloud-relay-force-progress" });
-      p.createEl("span", { cls: "cloud-relay-spinner", text: "↻" });
-      p.createSpan({ text: ` ${this.forceProgress}` });
-    }
-
-    new Setting(containerEl)
       .setName("Opsi berbahaya")
       .setDesc("Tampilkan tombol Reset server & Disconnect. Hanya aktifkan saat benar-benar dibutuhkan.")
       .addToggle((toggle) =>
@@ -614,6 +567,54 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       );
 
     if (this.showDanger) {
+      new Setting(containerEl)
+        .setName("Kosongkan Server, Server Import Dari Device Ini")
+        .setDesc("Hapus seluruh data server lalu impor ulang catatan, lampiran, folder, dan pengaturan dari device ini. Gunakan hanya jika device ini adalah sumber yang paling benar.")
+        .addButton((btn) =>
+          btn.setButtonText("Kosongkan server dan impor").onClick(async () => {
+            if (!this.forceArmed) {
+              this.forceArmed = true;
+              btn.setButtonText("YAKIN? Klik lagi");
+              btn.buttonEl.addClass("cloud-relay-danger-confirm");
+              window.setTimeout(() => {
+                if (this.forceArmed) {
+                  this.forceArmed = false;
+                  this.display();
+                }
+              }, 6000);
+              return;
+            }
+            this.forceArmed = false;
+            this.forceProgress = "Memulai…";
+            btn.setDisabled(true);
+            btn.setButtonText("Mengimpor…");
+            this.display();
+            try {
+              const ok = await this.plugin.rescanVault((msg) => {
+                this.forceProgress = msg;
+                const el = containerEl.querySelector(".cloud-relay-force-progress");
+                if (el instanceof HTMLElement) el.setText(msg);
+              });
+              this.forceProgress = null;
+              this.checkResult = await this.plugin.syncSummary();
+              if (!ok) new Notice("Cloud Relay: selesai dengan catatan — lihat panel hasil.", 6000);
+            } catch (e) {
+              this.forceProgress = null;
+              new Notice(`Cloud Relay: gagal — ${e}`);
+            } finally {
+              btn.setDisabled(false);
+              btn.setButtonText("Kosongkan server dan impor");
+              this.display();
+            }
+          })
+        );
+
+      if (this.forceProgress !== null) {
+        const p = containerEl.createDiv({ cls: "cloud-relay-force-progress" });
+        p.createEl("span", { cls: "cloud-relay-spinner", text: "↻" });
+        p.createSpan({ text: ` ${this.forceProgress}` });
+      }
+
       new Setting(containerEl)
         .setName("Pulihkan dari server")
         .setDesc("Kosongkan catatan lokal + data sync device ini, lalu tarik ulang seluruh isi dari server. Berguna bila data lokal rusak (server tidak diubah).")
