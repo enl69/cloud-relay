@@ -581,6 +581,17 @@ export class NoteSyncManager {
       if (sent % 10 === 0) progress(`Mengunggah catatan ${sent}/${total}…`);
       await sleep0();
     }
+    for (let pass = 1; pass <= 3; pass++) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      let resent = 0;
+      for (const [id, entry] of this.docs) {
+        if (id.startsWith("__") || this.suspended) continue;
+        this.conn.send(encodeFrame(MSG_UPDATE, id, new Uint8Array(Y.encodeStateAsUpdate(entry.doc))));
+        resent++;
+        if (resent % 20 === 0) await sleep0();
+      }
+      progress(`Verifikasi upload server ${pass}/3…`);
+    }
     progress(`Pengunggahan selesai (${total} catatan).`);
   }
 
