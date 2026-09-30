@@ -1061,8 +1061,19 @@ export class NoteSyncManager {
   private queueApply(noteId: string, update: Uint8Array) {
     this.applyQueueDepth++;
     this.applySerial = this.applySerial
-      .then(() => this.applyRemote(noteId, update))
-      .catch((e) => console.error("cloud-relay apply gagal:", e))
+      .then(async () => {
+        let lastError: unknown = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await this.applyRemote(noteId, update);
+            return;
+          } catch (e) {
+            lastError = e;
+            await new Promise((resolve) => window.setTimeout(resolve, attempt * 250));
+          }
+        }
+        console.error("cloud-relay apply gagal setelah retry", noteId, lastError);
+      })
       .finally(() => {
         this.applyQueueDepth--;
       });

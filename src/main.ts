@@ -466,7 +466,7 @@ export default class CloudRelayPlugin extends Plugin {
           last = local;
           progress(`Menarik data server… ${local}/${before.notes} catatan`);
         }
-        if (counts && local === counts.notes && local === before.notes) {
+        if (counts && local === counts.notes && local === before.notes && this.syncManager.applyQueueSize() === 0) {
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
           const finalCounts = await this.fetchVaultCounts();
           const finalLocal = this.app.vault.getMarkdownFiles().length;
