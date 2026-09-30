@@ -177,10 +177,14 @@ function readText(dev, p) {
   for (const [p, c] of dataset) A.vault.fsWrite(p, c);
   A.vault.fsWriteBinary("img/foto.png", new Uint8Array([1, 2, 3, 4, 5]));
   A.vault.fsWriteBinary("img/dokumen.pdf", new Uint8Array([9, 8, 7]));
+  A.vault.fsWriteBinary("data/archive.zip", new Uint8Array([80, 75, 3, 4, 0, 0]));
+  A.vault.fsWriteBinary("data/zero.bin", new Uint8Array());
+  A.vault.fsWriteBinary("data/данные.json", new TextEncoder().encode('{"ok":true}'));
   A.vault.adapter.files.set(".obsidian/app.json", {
     data: new TextEncoder().encode('{"theme":"dark"}'),
     mtime: Date.now(),
   });
+  A.vault.adapter.folders.add("empty-folder");
 
   await A.manager.init();
   A.manager.setHttpTransport({ baseUrl: BASE, token: VTOK });
@@ -190,7 +194,7 @@ function readText(dev, p) {
   await A.manager.initHiddenFiles();
   await A.manager.initAttachments();
   await settle(2500);
-  console.log("A siap: 8 md + 2 lampiran + 1 hidden");
+  console.log("A siap: 8 md + 5 lampiran + 1 hidden + 1 folder kosong");
 
   // ============================================================
   console.log("\n=== JOIN 1: device C kotor → 'Ikuti (ganti total)' ===");
@@ -245,8 +249,13 @@ function readText(dev, p) {
     await settle(2000);
     assert.ok(C.vault.adapter.files.has("img/foto.png"), "foto.png harus ada di C");
     assert.ok(C.vault.adapter.files.has("img/dokumen.pdf"), "dokumen.pdf harus ada di C");
+    assert.ok(C.vault.adapter.files.has("data/archive.zip"), "archive.zip harus ada di C");
+    assert.ok(C.vault.adapter.files.has("data/zero.bin"), "zero.bin harus ada di C");
+    assert.ok(C.vault.adapter.files.has("data/данные.json"), "Unicode file harus ada di C");
     const d = C.vault.adapter.files.get("img/foto.png").data;
     assert.deepEqual(Array.from(d), [1, 2, 3, 4, 5], "isi biner identik");
+    assert.deepEqual(Array.from(C.vault.adapter.files.get("data/archive.zip").data), [80, 75, 3, 4, 0, 0]);
+    assert.equal(C.vault.adapter.files.get("data/zero.bin").data.length, 0);
   });
 
   await test("hidden file (app.json) ikut turun saat join", async () => {
