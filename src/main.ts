@@ -392,19 +392,7 @@ export default class CloudRelayPlugin extends Plugin {
   }
 
   async resetServerVault(): Promise<boolean> {
-    try {
-      await requestUrl({
-        url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/reset?token=${encodeURIComponent(this.settings.vaultToken)}`,
-        method: "POST",
-      });
-      this.stopSync();
-      await this.resetLocalSync();
-      if (this.settings.enabled) this.startSync();
-      return true;
-    } catch (e) {
-      new Notice(`Cloud Relay: reset server gagal (${e})`);
-      return false;
-    }
+    return this.rescanVault((message) => new Notice(`Cloud Relay: ${message}`));
   }
 
   async resetLocalSync() {
@@ -439,26 +427,7 @@ export default class CloudRelayPlugin extends Plugin {
   }
 
   async recoverFromServer(): Promise<boolean> {
-    if (!this.syncManager) return false;
-    new Notice("Cloud Relay: memulihkan data sync dari server…");
-    this.stopSync();
-    await this.syncManager.reset();
-    const files = this.app.vault.getMarkdownFiles();
-    this.syncManager.suspend();
-    let n = 0;
-    for (const file of files) {
-      try {
-        await this.app.fileManager.trashFile(file);
-        n++;
-      } catch (e) {
-        console.error("cloud-relay: gagal menghapus", file.path, e);
-      }
-    }
-    this.syncManager.resumeAfterReset();
-    await this.saveSettings();
-    this.startSync();
-    new Notice(`Cloud Relay: ${n} catatan lokal dikosongkan, menarik ulang dari server…`);
-    return true;
+    return this.refreshFromServer((message) => new Notice(`Cloud Relay: ${message}`));
   }
 
   async refreshFromServer(onProgress?: (message: string) => void): Promise<boolean> {
