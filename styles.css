@@ -119,6 +119,40 @@ p.cloud-relay-ok {
   display: none;
 }
 
+.cloud-relay-support {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-4);
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: var(--size-4-5) 0;
+  margin: var(--size-4-5) 0;
+}
+.cloud-relay-support-text h3 {
+  margin: 0 0 var(--size-4-1);
+}
+.cloud-relay-support-text p {
+  color: var(--text-muted);
+  margin: 0;
+}
+.cloud-relay-support-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  flex-shrink: 0;
+}
+.cloud-relay-support-actions button {
+  background: var(--background-modifier-hover);
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: var(--font-ui-medium);
+  padding: var(--size-4-3) var(--size-4-4);
+}
+.cloud-relay-support-actions button:hover {
+  background: var(--background-modifier-active-hover);
+}
 .cloud-relay-danger-confirm {
   background-color: var(--background-modifier-error) !important;
   color: var(--text-on-accent) !important;

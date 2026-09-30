@@ -524,6 +524,18 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       }
     }
 
+    const support = containerEl.createDiv({ cls: "cloud-relay-support" });
+    const supportText = support.createDiv({ cls: "cloud-relay-support-text" });
+    supportText.createEl("h3", { text: "Support development" });
+    supportText.createEl("p", {
+      text: "Jika Cloud Relay membantu pekerjaanmu, pertimbangkan mendukung pengembangannya.",
+    });
+    const supportActions = support.createDiv({ cls: "cloud-relay-support-actions" });
+    const sponsor = supportActions.createEl("button", { text: "❤️ Sponsor" });
+    sponsor.addEventListener("click", () => window.open("https://github.com/sponsors/enl69"));
+    const coffee = supportActions.createEl("button", { text: "☕ Buy me a coffee" });
+    coffee.addEventListener("click", () => window.open("https://buymeacoffee.com/enl69"));
+
     new Setting(containerEl)
       .setName("Opsi berbahaya")
       .setDesc("Tampilkan tombol Reset server & Disconnect. Hanya aktifkan saat benar-benar dibutuhkan.")
