@@ -153,10 +153,11 @@ p.cloud-relay-ok {
 .cloud-relay-support-actions button:hover {
   background: var(--background-modifier-active-hover);
 }
+.cloud-relay-support-actions button.cloud-relay-danger-confirm,
 .cloud-relay-danger-confirm {
-  background-color: var(--background-modifier-error) !important;
-  color: var(--text-on-accent) !important;
-  border-color: var(--text-error) !important;
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  border-color: var(--text-error);
 }
 .cloud-relay-force-progress {
   display: flex;

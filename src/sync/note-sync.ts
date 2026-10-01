@@ -1307,7 +1307,7 @@ export class NoteSyncManager {
       }
       if (!entry) return;
       entry.doc.transact(() => {
-        Y.applyUpdate(entry!.doc, update);
+        Y.applyUpdate(entry.doc, update);
       }, "remote");
       return;
     }
@@ -1417,7 +1417,7 @@ export class NoteSyncManager {
         ? this.vault.getAbstractFileByPath(finalPath)
         : null;
       if (occupant instanceof TFile) {
-        const occupantId = this.findNoteIdByPath(finalPath!);
+        const occupantId = this.findNoteIdByPath(finalPath);
         if (occupantId === noteId) {
           // path ditempati note ini sendiri → idempotent, pakai saja
         } else {
@@ -1436,10 +1436,10 @@ export class NoteSyncManager {
               // ID REMOTE (noteId) adalah identitas kanonik di server —
               // adopsi ID remote sebagai pemilik, PENSIUNKAN ID lokal.
               // (Sebaliknya = dobel di server: kedua ID hidup berdampingan)
-              this.index[noteId] = { path: finalPath!, deleted: false };
-              const nfAdopt = this.vault.getAbstractFileByPath(finalPath!);
+              this.index[noteId] = { path: finalPath, deleted: false };
+              const nfAdopt = this.vault.getAbstractFileByPath(finalPath);
               if (nfAdopt instanceof TFile) {
-                this.markSelfWrite(finalPath!, nfAdopt.stat.mtime);
+                this.markSelfWrite(finalPath, nfAdopt.stat.mtime);
                 this.index[noteId].mtime = nfAdopt.stat.mtime;
               }
               this.index[occupantId] = {
@@ -1448,20 +1448,20 @@ export class NoteSyncManager {
               };
               await this.store.writeIndex(this.index);
               entry.lastContent = newContent;
-              entry.lastPath = finalPath!;
+              entry.lastPath = finalPath;
               await this.persistNow(noteId);
               return;
             }
             // tidak ada pemilik terdaftar: note ini MENGADOPSI file tersebut
-            this.index[noteId] = { path: finalPath!, deleted: false };
-            const nf = this.vault.getAbstractFileByPath(finalPath!);
+            this.index[noteId] = { path: finalPath, deleted: false };
+            const nf = this.vault.getAbstractFileByPath(finalPath);
             if (nf instanceof TFile) {
-              this.markSelfWrite(finalPath!, nf.stat.mtime);
+              this.markSelfWrite(finalPath, nf.stat.mtime);
               this.index[noteId].mtime = nf.stat.mtime;
             }
             await this.store.writeIndex(this.index);
             entry.lastContent = newContent;
-            entry.lastPath = finalPath!;
+            entry.lastPath = finalPath;
             await this.persistNow(noteId);
             return;
           }
@@ -1475,9 +1475,9 @@ export class NoteSyncManager {
           if (this.conflictHandler) {
             this.conflictHandler({
               noteId,
-              path: finalPath!,
+              path: finalPath,
               local: await this.vault.adapter
-                .read(finalPath!)
+                .read(finalPath)
                 .catch(() => ""),
               remote: newContent,
               deleted: false,
@@ -1486,20 +1486,20 @@ export class NoteSyncManager {
             return;
           }
           // fallback tanpa handler: timpa in-place
-          this.applyingRemoteByPath.add(finalPath!);
+          this.applyingRemoteByPath.add(finalPath);
           await this.vault.adapter
-            .write(finalPath!, newContent)
+            .write(finalPath, newContent)
             .catch(() => null);
-          this.applyingRemoteByPath.delete(finalPath!);
-          const nfFallback = this.vault.getAbstractFileByPath(finalPath!);
+          this.applyingRemoteByPath.delete(finalPath);
+          const nfFallback = this.vault.getAbstractFileByPath(finalPath);
           if (nfFallback instanceof TFile) {
-            this.markSelfWrite(finalPath!, nfFallback.stat.mtime);
+            this.markSelfWrite(finalPath, nfFallback.stat.mtime);
             this.index[noteId].mtime = nfFallback.stat.mtime;
           }
-          this.index[noteId] = { path: finalPath!, deleted: false };
+          this.index[noteId] = { path: finalPath, deleted: false };
           this.scheduleIndexWrite();
           entry.lastContent = newContent;
-          entry.lastPath = finalPath!;
+          entry.lastPath = finalPath;
           await this.persistNow(noteId);
           return;
         }

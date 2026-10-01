@@ -531,10 +531,12 @@ export class CloudRelaySettingTab extends PluginSettingTab {
       text: "Jika Cloud Relay membantu pekerjaanmu, pertimbangkan mendukung pengembangannya.",
     });
     const supportActions = support.createDiv({ cls: "cloud-relay-support-actions" });
-    const sponsor = supportActions.createEl("button", { text: "❤️ Sponsor" });
-    sponsor.addEventListener("click", () => window.open("https://github.com/sponsors/enl69"));
-    const coffee = supportActions.createEl("button", { text: "☕ Buy me a coffee" });
-    coffee.addEventListener("click", () => window.open("https://buymeacoffee.com/enl69"));
+    supportActions
+      .createEl("button", { text: "❤️ Sponsor" })
+      .addEventListener("click", () => window.open("https://github.com/sponsors/enl69"));
+    supportActions
+      .createEl("button", { text: "☕ Buy me a coffee" })
+      .addEventListener("click", () => window.open("https://buymeacoffee.com/enl69"));
 
     new Setting(containerEl)
       .setName("Opsi berbahaya")
@@ -601,7 +603,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         .setName("Kosongkan dan ikuti server")
         .setDesc("Hapus seluruh isi lokal, reset state sync, lalu tarik ulang catatan, lampiran, folder, dan pengaturan dari server. Server tidak diubah.")
         .addButton((btn) =>
-          btn.setButtonText("Ikuti server ulang").onClick(async () => {
+          btn.setButtonText("Ikuti server ulang").onClick(() => {
+            void (async () => {
             if (!this.recoverArmed) {
               this.recoverArmed = true;
               btn.setButtonText("YAKIN? Klik lagi");
@@ -625,6 +628,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
               btn.setButtonText("Ikuti server ulang");
               this.display();
             }
+            })();
           })
         );
 

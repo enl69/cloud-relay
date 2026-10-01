@@ -236,7 +236,7 @@ export default class CloudRelayPlugin extends Plugin {
         url: `${this.settings.serverUrl.replace(/\/$/, "")}/v1/vaults/${this.settings.vaultId}/counts?token=${encodeURIComponent(this.settings.vaultToken)}`,
         method: "GET",
       });
-      return res.json as unknown as {
+      return res.json as {
         notes: number;
         attachments: number;
         folders: number;
