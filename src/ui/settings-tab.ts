@@ -46,6 +46,10 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     return null;
   }
 
+  getSettingDefinitions() {
+    return [];
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
