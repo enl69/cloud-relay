@@ -525,18 +525,14 @@ export class CloudRelaySettingTab extends PluginSettingTab {
     }
 
     const support = containerEl.createDiv({ cls: "cloud-relay-support" });
-    const supportText = support.createDiv({ cls: "cloud-relay-support-text" });
-    supportText.createEl("h3", { text: "Support development" });
-    supportText.createEl("p", {
+    new Setting(support).setName("Support development").setHeading();
+    support.createEl("p", {
       text: "Jika Cloud Relay membantu pekerjaanmu, pertimbangkan mendukung pengembangannya.",
+      cls: "cloud-relay-support-text",
     });
-    const supportActions = support.createDiv({ cls: "cloud-relay-support-actions" });
-    supportActions
-      .createEl("button", { text: "❤️ Sponsor" })
-      .addEventListener("click", () => window.open("https://github.com/sponsors/enl69"));
-    supportActions
-      .createEl("button", { text: "☕ Buy me a coffee" })
-      .addEventListener("click", () => window.open("https://buymeacoffee.com/enl69"));
+    new Setting(support)
+      .addButton((btn) => btn.setButtonText("❤️ Sponsor").onClick(() => window.open("https://github.com/sponsors/enl69")))
+      .addButton((btn) => btn.setButtonText("☕ Buy me a coffee").onClick(() => window.open("https://buymeacoffee.com/enl69")));
 
     new Setting(containerEl)
       .setName("Opsi berbahaya")
@@ -555,7 +551,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         .setName("Kosongkan Server, Server Import Dari Device Ini")
         .setDesc("Hapus seluruh data server lalu impor ulang catatan, lampiran, folder, dan pengaturan dari device ini. Gunakan hanya jika device ini adalah sumber yang paling benar.")
         .addButton((btn) =>
-          btn.setButtonText("Kosongkan server dan impor").onClick(async () => {
+          btn.setButtonText("Kosongkan server dan impor").onClick(() => {
+            void (async () => {
             if (!this.forceArmed) {
               this.forceArmed = true;
               btn.setButtonText("YAKIN? Klik lagi");
@@ -590,6 +587,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
               btn.setButtonText("Kosongkan server dan impor");
               this.display();
             }
+            })();
           })
         );
 
@@ -639,7 +637,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         )
         .addButton((btn) => {
           btn.setButtonText(this.resetArmed ? "YAKIN? Klik lagi untuk reset" : "Reset server");
-          btn.onClick(async () => {
+          btn.onClick(() => {
+            void (async () => {
             if (!this.resetArmed) {
               this.resetArmed = true;
               this.display();
@@ -656,6 +655,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
               new Notice("Cloud Relay: server di-reset, mengunggah ulang dari device ini…");
             }
             this.display();
+            })();
           });
         });
 
@@ -664,7 +664,8 @@ export class CloudRelaySettingTab extends PluginSettingTab {
         .setDesc("Hapus koneksi di device ini. Catatan lokal tidak dihapus.")
         .addButton((btn) => {
           btn.setButtonText(this.disconnectArmed ? "YAKIN? Klik lagi untuk disconnect" : "Disconnect");
-          btn.onClick(async () => {
+          btn.onClick(() => {
+            void (async () => {
             if (!this.disconnectArmed) {
               this.disconnectArmed = true;
               this.display();
@@ -684,6 +685,7 @@ export class CloudRelaySettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             this.step = 0;
             this.display();
+            })();
           });
         });
     }
